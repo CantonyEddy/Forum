@@ -13,7 +13,7 @@ var tmpl *template.Template
 func StartServer() {
 	var err error
 
-	tmpl, err = template.New("newgame").ParseFiles("web/HTML/NewGame.html")
+	tmpl, err = template.New("index").ParseFiles("Templates/index.html")
 	if err != nil {
 		panic(err)
 	}
