@@ -9,7 +9,7 @@ import (
 
 func InitTable() {
 	// Ouvrir une connexion à la base de données SQLite
-	db, err := sql.Open("sqlite3", "./DBForum.db")
+	db, err := sql.Open("sqlite3", "BDD/DBForum.db")
 	if err != nil {
 		log.Fatal(err)
 	}
