@@ -3,15 +3,18 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3" // Import the sqlite3 driver
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 var tmpl *template.Template
 var tmpl_register *template.Template
 var tmpl_login *template.Template
+var tmpl_main_page *template.Template
 var db *sql.DB
 
 func StartServer() {
@@ -40,6 +43,11 @@ func StartServer() {
 		panic(err)
 	}
 
+	tmpl_main_page, err = template.New("Forum").ParseFiles("Templates/forumMainPage.html")
+	if err != nil {
+		panic(err)
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
@@ -49,7 +57,12 @@ func StartServer() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
-			http.ServeFile(w, r, wd+"\\Templates\\index.html")
+			if !isAuthenticated(r) {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			} else {
+				http.ServeFile(w, r, wd+"\\Templates\\index.html")
+			}
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
@@ -71,12 +84,21 @@ func StartServer() {
 		}
 	})
 
+	http.HandleFunc("/Forum", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/Forum" {
+			http.ServeFile(w, r, wd+"\\Templates\\forumMainPage.html")
+		} else {
+			fileServer.ServeHTTP(w, r)
+		}
+	})
+
 	http.HandleFunc("/registerUser", handleRegister)
+	http.HandleFunc("/loginUser", handleLogin)
 
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
 	if err1 != nil {
-		log.Fatal("ListenAndServe: ", err)
+		log.Fatal("ListenAndServe: ", err1)
 	}
 }
 
@@ -126,4 +148,59 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "User %s registered successfully!", username)
+}
+
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+
+	// Check the user's credentials
+	var dbUsername, dbPassword string
+	query := `SELECT username, password FROM Account WHERE username = ?`
+	err := db.QueryRow(query, username).Scan(&dbUsername, &dbPassword)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Invalid username or passwords", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Error querying database", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if dbPassword != password {
+		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+		return
+	}
+
+	// Create a session token
+	sessionToken := fmt.Sprintf("%d", time.Now().UnixNano())
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+	})
+
+	log.Println("User logged in successfully:", username)
+
+	// Redirect to the homepage or another page
+	http.Redirect(w, r, "/Forum", http.StatusSeeOther)
+}
+
+func isAuthenticated(r *http.Request) bool {
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		return false
+	}
+
+	sessionToken := cookie.Value
+	// Vérifiez le token de session ici
+	// Par exemple, en le comparant avec une valeur stockée en mémoire ou en base de données
+
+	return sessionToken != ""
 }
