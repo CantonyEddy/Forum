@@ -1,3 +1,4 @@
+{{ define "Forum" }}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +6,14 @@
     <title>Title</title>
 </head>
 <body>
+    <h1>Welcome, {{.Username}}!</h1>
     <h1>Bienvenue sur le forum</h1>
+    {{range .Posts}}
+    <div>
+        <h3>{{.PostName}} by {{.CreatorID}} on {{.categoryName}}</h3>
+        <p>{{.PostMessage}}</p>
+    </div>
+    {{end}}
 </body>
 </html>
+{{ end }}

@@ -56,13 +56,13 @@ func createTables(db *sql.DB) {
 
 	// Créer la table Post
 	createPostTableSQL := `CREATE TABLE IF NOT EXISTS Post (
-        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-        post_name TEXT NOT NULL,
-        creator_name TEXT NOT NULL,
-        category_name TEXT,
-        post_message TEXT,
-        comments_messages TEXT
-    );`
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		post_name TEXT NOT NULL,
+		creator_id INTEGER NOT NULL,
+		post_message TEXT NOT NULL,
+		category_name TEXT,
+		FOREIGN KEY (creator_id) REFERENCES Account(id)
+	);`
 	_, err = db.Exec(createPostTableSQL)
 	if err != nil {
 		log.Fatal(err)
@@ -71,29 +71,29 @@ func createTables(db *sql.DB) {
 
 func insertExampleData(db *sql.DB) {
 	// Insérer des données dans Account
-	insertAccountSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
-	_, err := db.Exec(insertAccountSQL, "john_doe", "securepassword", "john@example.com", "admin")
-	if err != nil {
-		log.Fatal(err)
-	}
+	//insertAccountSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
+	//_, err := db.Exec(insertAccountSQL, "john_doe", "securepassword", "john@example.com", "admin")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	// Insérer des données dans ForumMainPage
-	insertForumMainPageSQL := `INSERT INTO ForumMainPage (post_name, creator_name, post_picture, category_name) VALUES (?, ?, ?, ?)`
-	_, err = db.Exec(insertForumMainPageSQL, "First Post", "john_doe", "link_to_picture", "General")
-	if err != nil {
-		log.Fatal(err)
-	}
+	//insertForumMainPageSQL := `INSERT INTO ForumMainPage (post_name, creator_name, post_picture, category_name) VALUES (?, ?, ?, ?)`
+	//_, err = db.Exec(insertForumMainPageSQL, "First Post", "john_doe", "link_to_picture", "General")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	// Insérer des données dans Post
-	insertPostSQL := `INSERT INTO Post (post_name, creator_name, category_name, post_message, comments_messages) VALUES (?, ?, ?, ?, ?)`
-	_, err = db.Exec(insertPostSQL, "First Post", "john_doe", "General", "This is the first post message", "")
+	insertPostSQL := `INSERT INTO Post (post_name, creator_id, post_message, category_name) VALUES (?, ?, ?, ?)`
+	_, err := db.Exec(insertPostSQL, "Eddy mon bébou", 5, "Eddy je t'aime et je t'aimerais toujours.", "Love Eddy")
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 func deleteAccountByID(db *sql.DB, id int) {
-	deleteSQL := `DELETE FROM Post WHERE id = ?`
+	deleteSQL := `DELETE FROM Account WHERE id = ?`
 	statement, err := db.Prepare(deleteSQL)
 	if err != nil {
 		log.Fatal(err)
@@ -149,7 +149,7 @@ func readData(db *sql.DB) {
 	}
 
 	// Lire les données de Post
-	rows, err = db.Query("SELECT id, post_name, creator_name, category_name, post_message, comments_messages FROM Post")
+	rows, err = db.Query("SELECT id, post_name, creator_id, post_message, category_name FROM Post")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -157,11 +157,11 @@ func readData(db *sql.DB) {
 
 	for rows.Next() {
 		var id int
-		var postName, creatorName, categoryName, postMessage, commentsMessages string
-		err = rows.Scan(&id, &postName, &creatorName, &categoryName, &postMessage, &commentsMessages)
+		var postName, creatorId, postMessage, categoryName string
+		err = rows.Scan(&id, &postName, &creatorId, &postMessage, &categoryName)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("Post: ID=%d, PostName=%s, CreatorName=%s, CategoryName=%s, PostMessage=%s, CommentsMessages=%s\n", id, postName, creatorName, categoryName, postMessage, commentsMessages)
+		fmt.Printf("Post: ID=%d, PostName=%s, CreatorName=%s, CategoryName=%s, PostMessage=%s, CommentsMessages=%s\n", id, postName, creatorId, categoryName, postMessage)
 	}
 }

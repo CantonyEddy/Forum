@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,8 @@ var tmpl_register *template.Template
 var tmpl_login *template.Template
 var tmpl_main_page *template.Template
 var db *sql.DB
+var sessions = map[string]string{}
+var sessionsMutex sync.Mutex
 
 func StartServer() {
 	var err error
@@ -86,7 +89,8 @@ func StartServer() {
 
 	http.HandleFunc("/Forum", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/Forum" {
-			http.ServeFile(w, r, wd+"\\Templates\\forumMainPage.html")
+			data := handleHome(w, r)
+			tmpl_main_page.Execute(w, data)
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
@@ -159,14 +163,15 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
-	// Check the user's credentials
 	var dbUsername, dbPassword string
 	query := `SELECT username, password FROM Account WHERE username = ?`
 	err := db.QueryRow(query, username).Scan(&dbUsername, &dbPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Invalid username or passwords", http.StatusUnauthorized)
+			log.Println("No user found with username:", username)
+			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		} else {
+			log.Println("Error querying database:", err)
 			http.Error(w, "Error querying database", http.StatusInternalServerError)
 		}
 		return
@@ -177,19 +182,57 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create a session token
 	sessionToken := fmt.Sprintf("%d", time.Now().UnixNano())
+	sessionsMutex.Lock()
+	sessions[sessionToken] = username
+	sessionsMutex.Unlock()
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    sessionToken,
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
 	})
+	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
+}
 
-	log.Println("User logged in successfully:", username)
+func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
+	username := getSessionUsername(r)
 
-	// Redirect to the homepage or another page
-	http.Redirect(w, r, "/Forum", http.StatusSeeOther)
+	// Récupérer les postes de la base de données
+	rows, err := db.Query(`SELECT id, post_name, creator_id, post_message, category_name FROM Post ORDER BY id DESC`)
+	if err != nil {
+		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+		return nil
+	}
+	defer rows.Close()
+
+	var posts []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var postName, creatorID, postMessage, category_name string
+		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &category_name)
+		if err != nil {
+			http.Error(w, "Error scanning post", http.StatusInternalServerError)
+			return nil
+		}
+
+		post := map[string]interface{}{
+			"ID":           id,
+			"PostName":     postName,
+			"CreatorID":    creatorID,
+			"PostMessage":  postMessage,
+			"categoryName": category_name,
+		}
+		posts = append(posts, post)
+	}
+
+	data := map[string]interface{}{
+		"Username": username,
+		"Posts":    posts,
+	}
+
+	return data
 }
 
 func isAuthenticated(r *http.Request) bool {
@@ -203,4 +246,18 @@ func isAuthenticated(r *http.Request) bool {
 	// Par exemple, en le comparant avec une valeur stockée en mémoire ou en base de données
 
 	return sessionToken != ""
+}
+
+func getSessionUsername(r *http.Request) string {
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		return ""
+	}
+
+	sessionToken := cookie.Value
+	sessionsMutex.Lock()
+	username := sessions[sessionToken]
+	sessionsMutex.Unlock()
+
+	return username
 }
