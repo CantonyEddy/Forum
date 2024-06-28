@@ -4,14 +4,18 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="e06a6bbc-e017-4ef8-a545-dc5f2051a6fd" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/Templates/forumMainPage.html" beforeDir="false" afterPath="$PROJECT_DIR$/Templates/forumMainPage.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/handlers/start_server.go" beforeDir="false" afterPath="$PROJECT_DIR$/handlers/start_server.go" afterDir="false" />
-    </list>
+    <list default="true" id="e06a6bbc-e017-4ef8-a545-dc5f2051a6fd" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="HTML File" />
+      </list>
+    </option>
   </component>
   <component name="GOROOT" url="file://$USER_HOME$/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.22.0.windows-amd64" />
   <component name="Git.Settings">
@@ -27,6 +31,7 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "DefaultHtmlFileTemplate": "HTML File",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.go.formatter.settings.were.checked": "true",
     "RunOnceActivity.go.migrated.go.modules.settings": "true",
