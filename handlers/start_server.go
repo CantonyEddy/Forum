@@ -118,6 +118,20 @@ func createTables(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	createPostTableSQL := `CREATE TABLE IF NOT EXISTS Post (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		post_name TEXT NOT NULL,
+		creator_id INTEGER NOT NULL,
+		post_message TEXT NOT NULL,
+		category_name TEXT,
+		FOREIGN KEY (creator_id) REFERENCES Account(id)
+	);`
+	_, err = db.Exec(createPostTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -246,6 +260,36 @@ func isAuthenticated(r *http.Request) bool {
 	// Par exemple, en le comparant avec une valeur stockée en mémoire ou en base de données
 
 	return sessionToken != ""
+}
+func createPost(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.FormValue("id")
+	postName := r.FormValue(" postName")
+	creatorID := r.FormValue("creatorID")
+	postMessage := r.FormValue("postMessage")
+	category_name := r.FormValue("category_name")
+
+	// Insert the user into the database
+	insertPostSQL := `INSERT INTO Post (id, postName, creatorID, postMessage, category_name) VALUES (?, ?, ?, ?, ?)`
+	statement, err := db.Prepare(insertPostSQL)
+	if err != nil {
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(id, postName, creatorID, postMessage, category_name)
+	if err != nil {
+		http.Error(w, "Error inserting user into database", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Post %s registered successfully!", id)
 }
 
 func getSessionUsername(r *http.Request) string {
