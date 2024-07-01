@@ -1,3 +1,4 @@
+{{ define "Forum" }}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -20,7 +21,12 @@
 
 </div>
 <div>div gestion de compte</div>
-
-
+{{range .Posts}}
+    <div>
+        <h3>{{.PostName}} by {{.CreatorID}} on {{.categoryName}}</h3>
+        <p>{{.PostMessage}}</p>
+    </div>
+{{end}}
 </body>
 </html>
+{{end}}

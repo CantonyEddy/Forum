@@ -13,7 +13,7 @@ var tmpl *template.Template
 func StartServer() {
 	var err error
 
-	tmpl, err = template.New("index").ParseFiles("Templates/index.html")
+	tmpl, err = template.New("MainPage").ParseFiles("Templates/forumMainPage.html")
 	if err != nil {
 		panic(err)
 	}
@@ -27,7 +27,7 @@ func StartServer() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
-			http.ServeFile(w, r, wd+"\\Templates\\index.html")
+			http.ServeFile(w, r, wd+"\\Templates\\forumMainPage.html")
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
