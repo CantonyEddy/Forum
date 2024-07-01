@@ -16,6 +16,7 @@ var tmpl *template.Template
 var tmpl_register *template.Template
 var tmpl_login *template.Template
 var tmpl_main_page *template.Template
+var tmpl_create_poste *template.Template
 var db *sql.DB
 var sessions = map[string]string{}
 var sessionsMutex sync.Mutex
@@ -47,6 +48,11 @@ func StartServer() {
 	}
 
 	tmpl_main_page, err = template.New("Forum").ParseFiles("Templates/forumMainPage.html")
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_create_poste, err = template.New("createPost").ParseFiles("Templates/createPost.html")
 	if err != nil {
 		panic(err)
 	}
@@ -96,8 +102,18 @@ func StartServer() {
 		}
 	})
 
+	http.HandleFunc("/createPost", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/createPost" {
+			data := handleHome(w, r)
+			tmpl_create_poste.Execute(w, data)
+		} else {
+			fileServer.ServeHTTP(w, r)
+		}
+	})
+
 	http.HandleFunc("/registerUser", handleRegister)
 	http.HandleFunc("/loginUser", handleLogin)
+	http.HandleFunc("/addPost", createPost)
 
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
@@ -268,14 +284,13 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := r.FormValue("id")
-	postName := r.FormValue(" postName")
-	creatorID := r.FormValue("creatorID")
+	postName := r.FormValue("postName")
+	creatorID := getSessionUsername(r)
 	postMessage := r.FormValue("postMessage")
 	category_name := r.FormValue("category_name")
 
 	// Insert the user into the database
-	insertPostSQL := `INSERT INTO Post (id, postName, creatorID, postMessage, category_name) VALUES (?, ?, ?, ?, ?)`
+	insertPostSQL := `INSERT INTO Post (post_name, creator_id, post_message, category_name) VALUES (?, ?, ?, ?)`
 	statement, err := db.Prepare(insertPostSQL)
 	if err != nil {
 		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
@@ -283,13 +298,13 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	}
 	defer statement.Close()
 
-	_, err = statement.Exec(id, postName, creatorID, postMessage, category_name)
+	_, err = statement.Exec(postName, creatorID, postMessage, category_name)
 	if err != nil {
 		http.Error(w, "Error inserting user into database", http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, "Post %s registered successfully!", id)
+	fmt.Fprintf(w, "Post %s registered successfully!", postName)
 }
 
 func getSessionUsername(r *http.Request) string {

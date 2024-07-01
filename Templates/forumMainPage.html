@@ -8,9 +8,9 @@
 <body>
     <h1>Welcome, {{.Username}}!</h1>
     <h1>Bienvenue sur le forum</h1>
+    <a href="/createPost" class="button">+Create Post</a>
     {{range .Posts}}
     <div>
-        <a href="createPost.html" class="button">+Create Post</a>
         <h3>{{.PostName}} by {{.CreatorID}} on {{.categoryName}}</h3>
         <p>{{.PostMessage}}</p>
     </div>
