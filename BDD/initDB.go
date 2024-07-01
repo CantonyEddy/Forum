@@ -67,6 +67,15 @@ func createTables(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	createImageTableSQL := `CREATE TABLE IF NOT EXISTS Post (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		link TEXT NOT NULL
+	);`
+	_, err = db.Exec(createImageTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func insertExampleData(db *sql.DB) {

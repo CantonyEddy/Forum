@@ -148,6 +148,15 @@ func createTables(db *sql.DB) {
 		log.Fatal(err)
 	}
 
+	createImageTableSQL := `CREATE TABLE IF NOT EXISTS Post (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		link TEXT NOT NULL
+	);`
+	_, err = db.Exec(createImageTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
