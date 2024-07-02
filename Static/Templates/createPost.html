@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Create Post</title>
-    <link rel="stylesheet" href="../CSS/createPost.css">
+    <link rel="stylesheet" href="/Static/CSS/createPost.css">
 </head>
 <body>
 <h1>Welcome, {{.Username}}!</h1>
@@ -19,12 +19,13 @@
     <input type="text" id="category_name" name="category_name" required><br><br>
 
     <label for="postImage">Upload Image:</label>
-    <input type="file" id="postImage" name="postImage" accept="image/*"><br><br>
+    <input type="file" id="postImage" name="postImage" accept="image/*" onchange="previewImage(event)"><br><br>
+    <img id="imagePreview" style="display:none; max-width: 100%; height: auto;">
 
     <input type="submit" value="Create Post">
 </form>
 
-<script src="../JavaScript/createPost.js"></script>
+<script src="/Static/JavaScript/createPost.js"></script>
 </body>
 </html>
 
