@@ -1,0 +1,31 @@
+{{ define "createPost" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Post</title>
+    <link rel="stylesheet" href="../Static/CSS/createPost.css">
+</head>
+<body>
+<h1>Welcome, {{.Username}}!</h1>
+<form action="/addPost" method="POST" enctype="multipart/form-data">
+    <label for="postName">Title:</label>
+    <input type="text" id="postName" name="postName" required><br><br>
+
+    <label for="postMessage">Message:</label>
+    <textarea id="postMessage" name="postMessage" required></textarea><br><br>
+
+    <label for="category_name">Category:</label>
+    <input type="text" id="category_name" name="category_name" required><br><br>
+
+    <label for="postImage">Upload Image:</label>
+    <input type="file" id="postImage" name="postImage" accept="image/*"><br><br>
+
+    <input type="submit" value="Create Post">
+</form>
+
+<script src="../Static/JavaScript/createPost.js"></script>
+</body>
+</html>
+
+{{end}}

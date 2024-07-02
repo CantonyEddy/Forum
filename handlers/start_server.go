@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,37 +34,48 @@ func StartServer() {
 
 	createTables(db) // Ensure tables are created
 
-	tmpl, err = template.New("index").ParseFiles("Templates/index.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_register, err = template.New("register").ParseFiles("Templates/register.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_login, err = template.New("login").ParseFiles("Templates/login.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_main_page, err = template.New("Forum").ParseFiles("Templates/forumMainPage.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_create_poste, err = template.New("createPost").ParseFiles("Templates/createPost.html")
-	if err != nil {
-		panic(err)
-	}
-
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fileServer := http.FileServer(http.Dir(wd + "\\web"))
+	tmpl, err = template.New("index").ParseFiles(filepath.Join(wd, "Static", "Templates", "index.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_register, err = template.New("register").ParseFiles(filepath.Join(wd, "Static", "Templates", "register.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_login, err = template.New("login").ParseFiles(filepath.Join(wd, "Static", "Templates", "login.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_main_page, err = template.New("Forum").ParseFiles(filepath.Join(wd, "Static", "Templates", "forumMainPage.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_create_poste, err = template.New("createPost").ParseFiles(filepath.Join(wd, "Static", "Templates", "createPost.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	fileServer := http.FileServer(http.Dir(filepath.Join(wd, "Static")))
+
+	// Handler pour servir les fichiers statiques
+	http.Handle("/Static/", http.StripPrefix("/Static/", fileServer))
+
+	// Route pour les fichiers CSS
+	http.HandleFunc("/Static/CSS/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Content-Type", "text/css")
+		}
+		http.ServeFile(w, r, filepath.Join(wd, r.URL.Path))
+	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
@@ -70,7 +83,7 @@ func StartServer() {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			} else {
-				http.ServeFile(w, r, wd+"\\Templates\\index.html")
+				http.ServeFile(w, r, filepath.Join(wd, "Static", "Templates", "index.html"))
 			}
 		} else {
 			fileServer.ServeHTTP(w, r)
@@ -79,7 +92,7 @@ func StartServer() {
 
 	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/register" {
-			http.ServeFile(w, r, wd+"\\Templates\\register.html")
+			http.ServeFile(w, r, filepath.Join(wd, "Static", "Templates", "register.html"))
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
@@ -87,7 +100,7 @@ func StartServer() {
 
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" {
-			http.ServeFile(w, r, wd+"\\Templates\\login.html")
+			http.ServeFile(w, r, filepath.Join(wd, "Static", "Templates", "login.html"))
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
@@ -109,6 +122,7 @@ func StartServer() {
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
+
 	})
 
 	http.HandleFunc("/registerUser", handleRegister)
