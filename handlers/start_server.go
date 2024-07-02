@@ -77,6 +77,14 @@ func StartServer() {
 		http.ServeFile(w, r, filepath.Join(wd, r.URL.Path))
 	})
 
+	// Route pour les fichiers JS
+	http.HandleFunc("/Static/JavaScript/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Content-Type", "application/javascript")
+		}
+		http.ServeFile(w, r, filepath.Join(wd, r.URL.Path))
+	})
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			if !isAuthenticated(r) {
