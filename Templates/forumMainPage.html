@@ -8,6 +8,9 @@
 <body>
     <h1>Welcome, {{.Username}}!</h1>
     <h1>Bienvenue sur le forum</h1>
+    {{if .Rank}}
+        <a href="/adminPannel" class="button">admin pannel</a>
+    {{end}}
     {{range .Posts}}
     <div>
         <h3>{{.PostName}} by {{.CreatorID}} on {{.categoryName}}</h3>

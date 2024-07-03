@@ -16,6 +16,7 @@ var tmpl *template.Template
 var tmpl_register *template.Template
 var tmpl_login *template.Template
 var tmpl_main_page *template.Template
+var tmpl_admin_pannel *template.Template
 var db *sql.DB
 var sessions = map[string]string{}
 var sessionsMutex sync.Mutex
@@ -47,6 +48,11 @@ func StartServer() {
 	}
 
 	tmpl_main_page, err = template.New("Forum").ParseFiles("Templates/forumMainPage.html")
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_admin_pannel, err = template.New("adminPannel").ParseFiles("Templates/adminPannel.html")
 	if err != nil {
 		panic(err)
 	}
@@ -96,8 +102,27 @@ func StartServer() {
 		}
 	})
 
+	http.HandleFunc("/adminPannel", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/adminPannel" {
+			rank, err := getSessionRank(r)
+			if err != nil {
+				http.Error(w, "Error getting rank", http.StatusInternalServerError)
+				return
+			}
+			if rank == "admin" {
+				data := handleAccount(w)
+				tmpl_admin_pannel.Execute(w, data)
+			} else {
+				http.Redirect(w, r, "/Forum", http.StatusSeeOther)
+			}
+		} else {
+			fileServer.ServeHTTP(w, r)
+		}
+	})
+
 	http.HandleFunc("/registerUser", handleRegister)
 	http.HandleFunc("/loginUser", handleLogin)
+	http.HandleFunc("/upgradeRank", handleRankUp)
 
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
@@ -198,6 +223,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	username := getSessionUsername(r)
+	rank, err := getSessionRank(r)
+	if err != nil {
+		http.Error(w, "Error getting rank", http.StatusInternalServerError)
+		return nil
+	}
 
 	// Récupérer les postes de la base de données
 	rows, err := db.Query(`SELECT id, post_name, creator_id, post_message, category_name FROM Post ORDER BY id DESC`)
@@ -227,12 +257,74 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 		posts = append(posts, post)
 	}
 
+	isAdmin := false
+	if rank == "admin" {
+		isAdmin = true
+	}
+
 	data := map[string]interface{}{
 		"Username": username,
 		"Posts":    posts,
+		"Rank":     isAdmin,
 	}
 
 	return data
+}
+
+func handleAccount(w http.ResponseWriter) map[string]interface{} {
+	rows, err := db.Query(`SELECT id, username, rank FROM Account ORDER BY id DESC`)
+	if err != nil {
+		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+		return nil
+	}
+	defer rows.Close()
+
+	var accounts []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var username, rank string
+		err := rows.Scan(&id, &username, &rank)
+		if err != nil {
+			http.Error(w, "Error scanning post", http.StatusInternalServerError)
+			return nil
+		}
+
+		account := map[string]interface{}{
+			"ID":       id,
+			"Username": username,
+			"Rank":     rank,
+		}
+		accounts = append(accounts, account)
+	}
+
+	data := map[string]interface{}{
+		"Accounts": accounts,
+	}
+
+	return data
+}
+
+func handleRankUp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := r.FormValue("username")
+	updateRankSQL := `UPDATE Account SET rank = ? WHERE username = ?`
+	stmt, err := db.Prepare(updateRankSQL)
+	if err != nil {
+		return
+	}
+	defer stmt.Close()
+
+	// Exécute la commande avec les valeurs fournies
+	_, err = stmt.Exec("Modérateurs", username)
+	if err != nil {
+		return
+	}
+
+	return
 }
 
 func isAuthenticated(r *http.Request) bool {
@@ -260,4 +352,28 @@ func getSessionUsername(r *http.Request) string {
 	sessionsMutex.Unlock()
 
 	return username
+}
+
+func getSessionRank(r *http.Request) (string, error) {
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		return "", err
+	}
+
+	sessionToken := cookie.Value
+	sessionsMutex.Lock()
+	username, exists := sessions[sessionToken]
+	sessionsMutex.Unlock()
+
+	if !exists {
+		return "", fmt.Errorf("session not found")
+	}
+
+	var rank string
+	err = db.QueryRow("SELECT rank FROM Account WHERE username = ?", username).Scan(&rank)
+	if err != nil {
+		return "", err
+	}
+
+	return rank, nil
 }

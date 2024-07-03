@@ -1,0 +1,21 @@
+{{ define "adminPannel" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin pannel</title>
+</head>
+<body>
+    <form action="/upgradeRank" method="POST" enctype="multipart/form-data">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required><br><br>
+        <input type="submit" value="Create Post">
+    </form>
+    {{range .Accounts}}
+    <div>
+        <h3>{{.Username}} : {{.Rank}}</h3>
+    </div>
+    {{end}}
+</body>
+</html>
+{{end}}
