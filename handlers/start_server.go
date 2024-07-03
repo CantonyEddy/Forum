@@ -5,6 +5,7 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3" // Import the sqlite3 driver
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ var tmpl_register *template.Template
 var tmpl_login *template.Template
 var tmpl_main_page *template.Template
 var tmpl_create_poste *template.Template
+var tmpl_create_image *template.Template
 var db *sql.DB
 var sessions = map[string]string{}
 var sessionsMutex sync.Mutex
@@ -60,6 +62,10 @@ func StartServer() {
 	}
 
 	tmpl_create_poste, err = template.New("createPost").ParseFiles(filepath.Join(wd, "Static", "Templates", "createPost.html"))
+	if err != nil {
+		panic(err)
+	}
+	tmpl_create_image, err = template.New("createImage").ParseFiles(filepath.Join(wd, "Static", "Templates", "createPost.html"))
 	if err != nil {
 		panic(err)
 	}
@@ -336,6 +342,66 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "Post %s registered successfully!", postName)
+}
+
+func createImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	r.ParseMultipartForm(20 << 20) // Limite de 20 MB
+
+	link := r.FormValue("link")
+
+	// Insert the link into the Image table
+	insertImageSQL := `INSERT INTO Image (link) VALUES (?)`
+	statement, err := db.Prepare(insertImageSQL)
+	if err != nil {
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(link)
+	if err != nil {
+		http.Error(w, "Error inserting image link into database", http.StatusInternalServerError)
+		return
+	}
+
+	// Retrieve the file and content from the form
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	content := r.FormValue("content")
+
+	// Save the file to the disk
+	filePath := filepath.Join("uploads/images", handler.Filename)
+	dest, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, "Error saving the file", http.StatusInternalServerError)
+		return
+	}
+	defer dest.Close()
+	_, err = io.Copy(dest, file)
+	if err != nil {
+		http.Error(w, "Error saving the file", http.StatusInternalServerError)
+		return
+	}
+
+	// Insert the post details into the posts table
+	_, err = db.Exec("INSERT INTO posts (content, image_path) VALUES (?, ?)", content, filePath)
+	if err != nil {
+		http.Error(w, "Error saving the post", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "File uploaded successfully: %s\n", handler.Filename)
+	fmt.Fprintf(w, "Image %s registered successfully!", link)
 }
 
 func getSessionUsername(r *http.Request) string {
