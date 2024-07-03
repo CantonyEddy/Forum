@@ -8,21 +8,15 @@
 </head>
 <body>
 <h1>Welcome, {{.Username}}!</h1>
-<form action="/addPost" method="POST" enctype="multipart/form-data">
-    <label for="postName">Title:</label>
-    <input type="text" id="postName" name="postName" required><br><br>
-
-    <label for="postMessage">Message:</label>
-    <textarea id="postMessage" name="postMessage" required></textarea><br><br>
-
-    <label for="category_name">Category:</label>
-    <input type="text" id="category_name" name="category_name" required><br><br>
-
-    <label for="postImage">Upload Image:</label>
-    <input type="file" id="postImage" name="postImage" accept="image/*" onchange="previewImage(event)"><br><br>
-    <img id="imagePreview" style="display:none; max-width: 100%; height: auto;">
-
-    <input type="submit" value="Create Post">
+<form action="/addPost" method="POST" enctype="multipart/form-data" class="create-post-form">
+    <input type="text" id="postName" name="postName" placeholder="Title Post" required class="title-input">
+    <input type="text" id="category_name" name="category_name" placeholder="Categorize" required class="category-input">
+    <input type="file" id="postImage" name="postImage" accept="image/*" onchange="previewImage(event)" class="image-input">
+    <textarea id="postMessage" name="postMessage" placeholder="Your Post" required class="message-input"></textarea>
+    <div class="image-preview-container">
+        <img id="imagePreview" src="#" alt="Preview Image" class="image-preview">
+    </div>
+    <input type="submit" value="Create Post" class="submit-button">
 </form>
 
 <script src="/Static/JavaScript/createPost.js"></script>
