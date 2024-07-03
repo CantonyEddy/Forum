@@ -11,6 +11,7 @@
     {{if .Rank}}
         <a href="/adminPannel" class="button">admin pannel</a>
     {{end}}
+    <a href="/createPost" class="button">+Create Post</a>
     {{range .Posts}}
     <div>
         <h3>{{.PostName}} by {{.CreatorID}} on {{.categoryName}}</h3>

@@ -5,9 +5,12 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3" // Import the sqlite3 driver
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,6 +20,8 @@ var tmpl_register *template.Template
 var tmpl_login *template.Template
 var tmpl_main_page *template.Template
 var tmpl_admin_pannel *template.Template
+var tmpl_create_poste *template.Template
+var tmpl_create_image *template.Template
 var db *sql.DB
 var sessions = map[string]string{}
 var sessionsMutex sync.Mutex
@@ -30,39 +35,67 @@ func StartServer() {
 	}
 	defer db.Close()
 
-	createTables(db) // Ensure tables are created
-
-	tmpl, err = template.New("index").ParseFiles("Templates/index.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_register, err = template.New("register").ParseFiles("Templates/register.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_login, err = template.New("login").ParseFiles("Templates/login.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_main_page, err = template.New("Forum").ParseFiles("Templates/forumMainPage.html")
-	if err != nil {
-		panic(err)
-	}
-
-	tmpl_admin_pannel, err = template.New("adminPannel").ParseFiles("Templates/adminPannel.html")
-	if err != nil {
-		panic(err)
-	}
-
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fileServer := http.FileServer(http.Dir(wd + "\\web"))
+	createTables(db) // Ensure tables are created
+
+	tmpl, err = template.New("index").ParseFiles(filepath.Join(wd, "Static", "Templates", "index.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_register, err = template.New("register").ParseFiles(filepath.Join(wd, "Static", "Templates", "register.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_login, err = template.New("login").ParseFiles(filepath.Join(wd, "Static", "Templates", "login.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_main_page, err = template.New("Forum").ParseFiles(filepath.Join(wd, "Static", "Templates", "forumMainPage.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_admin_pannel, err = template.New("adminPannel").ParseFiles(filepath.Join(wd, "Static", "Templates", "adminPannel.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_create_poste, err = template.New("createPost").ParseFiles(filepath.Join(wd, "Static", "Templates", "createPost.html"))
+	if err != nil {
+		panic(err)
+	}
+	tmpl_create_image, err = template.New("createImage").ParseFiles(filepath.Join(wd, "Static", "Templates", "createPost.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	fileServer := http.FileServer(http.Dir(filepath.Join(wd, "Static")))
+
+	// Handler pour servir les fichiers statiques
+	http.Handle("/Static/", http.StripPrefix("/Static/", fileServer))
+
+	// Route pour les fichiers CSS
+	http.HandleFunc("/Static/CSS/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Content-Type", "text/css")
+		}
+		http.ServeFile(w, r, filepath.Join(wd, r.URL.Path))
+	})
+
+	// Route pour les fichiers JS
+	http.HandleFunc("/Static/JavaScript/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Content-Type", "application/javascript")
+		}
+		http.ServeFile(w, r, filepath.Join(wd, r.URL.Path))
+	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
@@ -70,7 +103,7 @@ func StartServer() {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			} else {
-				http.ServeFile(w, r, wd+"\\Templates\\index.html")
+				http.ServeFile(w, r, filepath.Join(wd, "Static", "Templates", "index.html"))
 			}
 		} else {
 			fileServer.ServeHTTP(w, r)
@@ -79,7 +112,7 @@ func StartServer() {
 
 	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/register" {
-			http.ServeFile(w, r, wd+"\\Templates\\register.html")
+			http.ServeFile(w, r, filepath.Join(wd, "Static", "Templates", "register.html"))
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
@@ -87,7 +120,7 @@ func StartServer() {
 
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" {
-			http.ServeFile(w, r, wd+"\\Templates\\login.html")
+			http.ServeFile(w, r, filepath.Join(wd, "Static", "Templates", "login.html"))
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
@@ -120,9 +153,19 @@ func StartServer() {
 		}
 	})
 
+	http.HandleFunc("/createPost", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/createPost" {
+			data := handleHome(w, r)
+			tmpl_create_poste.Execute(w, data)
+		} else {
+			fileServer.ServeHTTP(w, r)
+		}
+	})
+
 	http.HandleFunc("/registerUser", handleRegister)
 	http.HandleFunc("/loginUser", handleLogin)
 	http.HandleFunc("/upgradeRank", handleRankUp)
+	http.HandleFunc("/addPost", createPost)
 
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
@@ -143,6 +186,29 @@ func createTables(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	createPostTableSQL := `CREATE TABLE IF NOT EXISTS Post (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		post_name TEXT NOT NULL,
+		creator_id INTEGER NOT NULL,
+		post_message TEXT NOT NULL,
+		category_name TEXT,
+		FOREIGN KEY (creator_id) REFERENCES Account(id)
+	);`
+	_, err = db.Exec(createPostTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	createImageTableSQL := `CREATE TABLE IF NOT EXISTS Post (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		link TEXT NOT NULL
+	);`
+	_, err = db.Exec(createImageTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -338,6 +404,95 @@ func isAuthenticated(r *http.Request) bool {
 	// Par exemple, en le comparant avec une valeur stockée en mémoire ou en base de données
 
 	return sessionToken != ""
+}
+func createPost(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	postName := r.FormValue("postName")
+	creatorID := getSessionUsername(r)
+	postMessage := r.FormValue("postMessage")
+	category_name := r.FormValue("category_name")
+
+	// Insert the user into the database
+	insertPostSQL := `INSERT INTO Post (post_name, creator_id, post_message, category_name) VALUES (?, ?, ?, ?)`
+	statement, err := db.Prepare(insertPostSQL)
+	if err != nil {
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(postName, creatorID, postMessage, category_name)
+	if err != nil {
+		http.Error(w, "Error inserting user into database", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Post %s registered successfully!", postName)
+}
+
+func createImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	r.ParseMultipartForm(20 << 20) // Limite de 20 MB
+
+	link := r.FormValue("link")
+
+	// Insert the link into the Image table
+	insertImageSQL := `INSERT INTO Image (link) VALUES (?)`
+	statement, err := db.Prepare(insertImageSQL)
+	if err != nil {
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(link)
+	if err != nil {
+		http.Error(w, "Error inserting image link into database", http.StatusInternalServerError)
+		return
+	}
+
+	// Retrieve the file and content from the form
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	content := r.FormValue("content")
+
+	// Save the file to the disk
+	filePath := filepath.Join("uploads/images", handler.Filename)
+	dest, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, "Error saving the file", http.StatusInternalServerError)
+		return
+	}
+	defer dest.Close()
+	_, err = io.Copy(dest, file)
+	if err != nil {
+		http.Error(w, "Error saving the file", http.StatusInternalServerError)
+		return
+	}
+
+	// Insert the post details into the posts table
+	_, err = db.Exec("INSERT INTO posts (content, image_path) VALUES (?, ?)", content, filePath)
+	if err != nil {
+		http.Error(w, "Error saving the post", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "File uploaded successfully: %s\n", handler.Filename)
+	fmt.Fprintf(w, "Image %s registered successfully!", link)
 }
 
 func getSessionUsername(r *http.Request) string {
