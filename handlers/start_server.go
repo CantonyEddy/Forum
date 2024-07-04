@@ -71,10 +71,6 @@ func StartServer() {
 	if err != nil {
 		panic(err)
 	}
-	tmpl_create_image, err = template.New("createImage").ParseFiles(filepath.Join(wd, "Static", "Templates", "createPost.html"))
-	if err != nil {
-		panic(err)
-	}
 
 	fileServer := http.FileServer(http.Dir(filepath.Join(wd, "Static")))
 
