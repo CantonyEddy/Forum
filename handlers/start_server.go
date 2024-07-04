@@ -40,6 +40,17 @@ func StartServer() {
 		log.Fatal(err)
 	}
 
+	err = ensureUploadDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db, err = sql.Open("sqlite3", "BDD/DBForum.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
 	createTables(db) // Ensure tables are created
 
 	tmpl, err = template.New("index").ParseFiles(filepath.Join(wd, "Static", "Templates", "index.html"))
@@ -196,10 +207,13 @@ func createTables(db *sql.DB) {
 		log.Fatal(err)
 	}
 
-	createImageTableSQL := `CREATE TABLE IF NOT EXISTS Post (
+	createImageTableSQL := `CREATE TABLE IF NOT EXISTS Image (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		link TEXT NOT NULL
+		link TEXT NOT NULL,
+		post_id INTEGER NOT NULL,
+		FOREIGN KEY (post_id) REFERENCES Post(id)
 	);`
+
 	_, err = db.Exec(createImageTableSQL)
 	if err != nil {
 		log.Fatal(err)
@@ -401,8 +415,8 @@ func isAuthenticated(r *http.Request) bool {
 
 	return sessionToken != ""
 }
-func createPost(w http.ResponseWriter, r *http.Request) {
 
+func createPost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -413,7 +427,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	postMessage := r.FormValue("postMessage")
 	category_name := r.FormValue("category_name")
 
-	// Insert the user into the database
+	// Insert the post into the database
 	insertPostSQL := `INSERT INTO Post (post_name, creator_id, post_message, category_name) VALUES (?, ?, ?, ?)`
 	statement, err := db.Prepare(insertPostSQL)
 	if err != nil {
@@ -422,73 +436,92 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	}
 	defer statement.Close()
 
-	_, err = statement.Exec(postName, creatorID, postMessage, category_name)
+	result, err := statement.Exec(postName, creatorID, postMessage, category_name)
 	if err != nil {
-		http.Error(w, "Error inserting user into database", http.StatusInternalServerError)
+		http.Error(w, "Error inserting post into database", http.StatusInternalServerError)
 		return
 	}
+
+	postID, err := result.LastInsertId()
+	if err != nil {
+		http.Error(w, "Error getting last insert ID", http.StatusInternalServerError)
+		return
+	}
+
+	// Handle the image upload
+	createImage(w, r, postID)
 
 	fmt.Fprintf(w, "Post %s registered successfully!", postName)
 }
 
-func createImage(w http.ResponseWriter, r *http.Request) {
+func createImage(w http.ResponseWriter, r *http.Request, postID int64) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
-	r.ParseMultipartForm(20 << 20) // Limite de 20 MB
 
-	link := r.FormValue("link")
-
-	// Insert the link into the Image table
-	insertImageSQL := `INSERT INTO Image (link) VALUES (?)`
-	statement, err := db.Prepare(insertImageSQL)
+	// Parse the multipart form
+	err := r.ParseMultipartForm(20 << 20) // Limite de 20 MB
 	if err != nil {
-		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
-		return
-	}
-	defer statement.Close()
-
-	_, err = statement.Exec(link)
-	if err != nil {
-		http.Error(w, "Error inserting image link into database", http.StatusInternalServerError)
+		http.Error(w, "Error parsing multipart form", http.StatusInternalServerError)
+		log.Println("Error parsing multipart form:", err)
 		return
 	}
 
-	// Retrieve the file and content from the form
-	file, handler, err := r.FormFile("file")
+	// Retrieve the file from form data
+	file, handler, err := r.FormFile("postImage")
 	if err != nil {
 		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		log.Println("Error retrieving the file:", err)
 		return
 	}
 	defer file.Close()
-
-	content := r.FormValue("content")
 
 	// Save the file to the disk
 	filePath := filepath.Join("uploads/images", handler.Filename)
 	dest, err := os.Create(filePath)
 	if err != nil {
 		http.Error(w, "Error saving the file", http.StatusInternalServerError)
+		log.Println("Error creating the file:", err)
 		return
 	}
 	defer dest.Close()
 	_, err = io.Copy(dest, file)
 	if err != nil {
 		http.Error(w, "Error saving the file", http.StatusInternalServerError)
+		log.Println("Error copying the file:", err)
 		return
 	}
 
-	// Insert the post details into the posts table
-	_, err = db.Exec("INSERT INTO posts (content, image_path) VALUES (?, ?)", content, filePath)
+	// Insert the image link into the Image table
+	insertImageSQL := `INSERT INTO Image (link, post_id) VALUES (?, ?)`
+	statement, err := db.Prepare(insertImageSQL)
 	if err != nil {
-		http.Error(w, "Error saving the post", http.StatusInternalServerError)
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
+		log.Println("Error preparing statement:", err)
+		return
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(filePath, postID)
+	if err != nil {
+		http.Error(w, "Error inserting image link into database", http.StatusInternalServerError)
+		log.Println("Error inserting image link into database:", err)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "File uploaded successfully: %s\n", handler.Filename)
-	fmt.Fprintf(w, "Image %s registered successfully!", link)
+}
+
+func ensureUploadDir() error {
+	uploadDir := filepath.Join("uploads", "images")
+	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
+		err := os.MkdirAll(uploadDir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create upload directory: %w", err)
+		}
+	}
+	return nil
 }
 
 func getSessionUsername(r *http.Request) string {
