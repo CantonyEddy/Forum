@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3" // Import the sqlite3 driver
 	"html/template"
@@ -162,6 +163,7 @@ func StartServer() {
 	http.HandleFunc("/loginUser", handleLogin)
 	http.HandleFunc("/upgradeRank", handleRankUp)
 	http.HandleFunc("/addPost", createPost)
+	http.HandleFunc("/likePost", handleLikePost)
 
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
@@ -189,6 +191,8 @@ func createTables(db *sql.DB) {
 		creator_id INTEGER NOT NULL,
 		post_message TEXT NOT NULL,
 		category_name TEXT,
+		likes INTEGER DEFAULT 0,
+    	dislikes INTEGER DEFAULT 0,
 		FOREIGN KEY (creator_id) REFERENCES Account(id)
 	);`
 	_, err = db.Exec(createPostTableSQL)
@@ -201,6 +205,20 @@ func createTables(db *sql.DB) {
 		link TEXT NOT NULL
 	);`
 	_, err = db.Exec(createImageTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	createLikeTableSQL := `CREATE TABLE IF NOT EXISTS PostLikes (
+		id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+		post_id INTEGER NOT NULL,
+		user_id INTEGER NOT NULL,
+		liked BOOLEAN NOT NULL,
+		FOREIGN KEY (post_id) REFERENCES Post(id),
+		FOREIGN KEY (user_id) REFERENCES Account(id),
+		UNIQUE(post_id, user_id)
+	);`
+	_, err = db.Exec(createLikeTableSQL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -292,7 +310,28 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	}
 
 	// Récupérer les postes de la base de données
-	rows, err := db.Query(`SELECT id, post_name, creator_id, post_message, category_name FROM Post ORDER BY id DESC`)
+	rows, err := db.Query(`SELECT 
+            p.id, 
+            p.post_name, 
+            p.creator_id, 
+            p.post_message, 
+            p.category_name, 
+            IFNULL(likeCount, 0) as likeCount, 
+            IFNULL(dislikeCount, 0) as dislikeCount
+        FROM 
+            Post p 
+        LEFT JOIN (
+            SELECT 
+                post_id, 
+                SUM(CASE WHEN liked = 1 THEN 1 ELSE 0 END) as likeCount, 
+                SUM(CASE WHEN liked = 0 THEN 1 ELSE 0 END) as dislikeCount 
+            FROM 
+                PostLikes 
+            GROUP BY 
+                post_id
+        ) pl 
+        ON p.id = pl.post_id 
+        ORDER BY p.id DESC`)
 	if err != nil {
 		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
 		return nil
@@ -301,9 +340,9 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 
 	var posts []map[string]interface{}
 	for rows.Next() {
-		var id int
+		var id, likes, dislikes int
 		var postName, creatorID, postMessage, category_name string
-		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &category_name)
+		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &category_name, &likes, &dislikes)
 		if err != nil {
 			http.Error(w, "Error scanning post", http.StatusInternalServerError)
 			return nil
@@ -315,6 +354,8 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 			"CreatorID":    creatorID,
 			"PostMessage":  postMessage,
 			"categoryName": category_name,
+			"LikeCount":    likes,
+			"DislikeCount": dislikes,
 		}
 		posts = append(posts, post)
 	}
@@ -331,6 +372,89 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	}
 
 	return data
+}
+
+func handleLikePost(w http.ResponseWriter, r *http.Request) {
+	userID := getSessionUserID(r)
+	if userID == 0 {
+		http.Error(w, "User not logged in", http.StatusUnauthorized)
+		return
+	}
+
+	postID := r.URL.Query().Get("postID")
+	like := r.URL.Query().Get("like") // "true" for like, "false" for dislike
+
+	if postID == "" || like == "" {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	liked := like == "true"
+
+	// Check if the user has already liked/disliked the post
+	var existingLikeID int
+	err := db.QueryRow(`SELECT id FROM PostLikes WHERE post_id = ? AND user_id = ?`, postID, userID).Scan(&existingLikeID)
+
+	if err == sql.ErrNoRows {
+		// No existing like/dislike, insert a new one
+		_, err = db.Exec(`INSERT INTO PostLikes (post_id, user_id, liked) VALUES (?, ?, ?)`, postID, userID, liked)
+		if err != nil {
+			http.Error(w, "Error liking post", http.StatusInternalServerError)
+			return
+		}
+	} else if err == nil {
+		// Existing like/dislike found, remove it
+		_, err = db.Exec(`DELETE FROM PostLikes WHERE id = ?`, existingLikeID)
+		if err != nil {
+			http.Error(w, "Error unliking post", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		http.Error(w, "Error checking like status", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the updated like/dislike count for the post
+	var likeCount, dislikeCount int
+	err = db.QueryRow(`SELECT 
+                        (SELECT COUNT(*) FROM PostLikes WHERE post_id = ? AND liked = 1) as likeCount,
+                        (SELECT COUNT(*) FROM PostLikes WHERE post_id = ? AND liked = 0) as dislikeCount`,
+		postID, postID).Scan(&likeCount, &dislikeCount)
+	if err != nil {
+		http.Error(w, "Error fetching like/dislike counts", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]int{
+		"likeCount":    likeCount,
+		"dislikeCount": dislikeCount,
+	}
+	jsonResponse, _ := json.Marshal(response)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonResponse)
+}
+
+func getSessionUserID(r *http.Request) int {
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		return 0
+	}
+
+	sessionToken := cookie.Value
+	sessionsMutex.Lock()
+	username := sessions[sessionToken]
+	sessionsMutex.Unlock()
+
+	if username == "" {
+		return 0
+	}
+
+	var userID int
+	err = db.QueryRow(`SELECT id FROM Account WHERE username = ?`, username).Scan(&userID)
+	if err != nil {
+		return 0
+	}
+	return userID
 }
 
 func handleAccount(w http.ResponseWriter) map[string]interface{} {

@@ -5,6 +5,24 @@
     <meta charset="UTF-8">
     <title>Title</title>
 </head>
+<script>
+    async function likePost(postID, like) {
+        const response = await fetch(`/likePost?postID=${postID}&like=${like}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById(`likeCount-${postID}`).textContent = data.likeCount;
+            document.getElementById(`dislikeCount-${postID}`).textContent = data.dislikeCount;
+        } else {
+            console.error('Failed to like/dislike post');
+        }
+    }
+</script>
 <body>
     <h1>Welcome, {{.Username}}!</h1>
     <h1>Bienvenue sur le forum</h1>
@@ -13,9 +31,13 @@
     {{end}}
     <a href="/createPost" class="button">+Create Post</a>
     {{range .Posts}}
-    <div>
-        <h3>{{.PostName}} by {{.CreatorID}} on {{.categoryName}}</h3>
+    <div class="post">
+        <h2>{{.PostName}}</h2>
         <p>{{.PostMessage}}</p>
+        <button onclick="likePost({{.ID}}, true)">Like</button>
+        <button onclick="likePost({{.ID}}, false)">Dislike</button>
+        <p>Likes: <span id="likeCount-{{.ID}}">{{.LikeCount}}</span></p>
+        <p>Dislikes: <span id="dislikeCount-{{.ID}}">{{.DislikeCount}}</span></p>
     </div>
     {{end}}
 </body>
