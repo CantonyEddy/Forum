@@ -6,7 +6,6 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3" // Import the sqlite3 driver
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -176,6 +175,11 @@ func StartServer() {
 	http.HandleFunc("/addPost", createPost)
 	http.HandleFunc("/likePost", handleLikePost)
 
+	http.HandleFunc("/auth/google/login", HandleGoogleLogin)
+	http.HandleFunc("/auth/google/callback", HandleGoogleCallback)
+	http.HandleFunc("/auth/github/login", HandleGitHubLogin)
+	http.HandleFunc("/auth/github/callback", HandleGitHubCallback)
+
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
 	if err1 != nil {
@@ -282,226 +286,196 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
+	// Query the user from the database
 	var dbUsername, dbPassword string
-	query := `SELECT username, password FROM Account WHERE username = ?`
+	query := "SELECT username, password FROM Account WHERE username = ?"
 	err := db.QueryRow(query, username).Scan(&dbUsername, &dbPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Println("No user found with username:", username)
 			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		} else {
-			log.Println("Error querying database:", err)
 			http.Error(w, "Error querying database", http.StatusInternalServerError)
 		}
 		return
 	}
 
-	if dbPassword != password {
+	if password != dbPassword {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
 
-	sessionToken := fmt.Sprintf("%d", time.Now().UnixNano())
+	// Generate a session token
+	sessionToken := generateSessionToken()
 	sessionsMutex.Lock()
 	sessions[sessionToken] = username
 	sessionsMutex.Unlock()
 
+	// Set the session token as a cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
-		Value:    sessionToken,
-		Expires:  time.Now().Add(24 * time.Hour),
-		HttpOnly: true,
+		Name:    "session_token",
+		Value:   sessionToken,
+		Expires: time.Now().Add(24 * time.Hour),
 	})
-	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
+
+	fmt.Fprintf(w, "User %s logged in successfully!", username)
 }
 
-func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
-	username := getSessionUsername(r)
-	rank, err := getSessionRank(r)
+func generateSessionToken() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+func ensureUploadDir() error {
+	uploadDir := filepath.Join("Static", "upload")
+	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
+		return os.MkdirAll(uploadDir, os.ModePerm)
+	}
+	return nil
+}
+
+func handleHome(w http.ResponseWriter, r *http.Request) any {
+	db, err := sql.Open("sqlite3", "BDD/DBForum.db")
 	if err != nil {
-		http.Error(w, "Error getting rank", http.StatusInternalServerError)
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	posts, err := getAllPosts(db)
+	if err != nil {
+		http.Error(w, "Failed to get posts", http.StatusInternalServerError)
 		return nil
 	}
 
-	// Récupérer les postes de la base de données
-	rows, err := db.Query(`SELECT 
-            p.id, 
-            p.post_name, 
-            p.creator_id, 
-            p.post_message, 
-            p.category_name, 
-            IFNULL(likeCount, 0) as likeCount, 
-            IFNULL(dislikeCount, 0) as dislikeCount
-        FROM 
-            Post p 
-        LEFT JOIN (
-            SELECT 
-                post_id, 
-                SUM(CASE WHEN liked = 1 THEN 1 ELSE 0 END) as likeCount, 
-                SUM(CASE WHEN liked = 0 THEN 1 ELSE 0 END) as dislikeCount 
-            FROM 
-                PostLikes 
-            GROUP BY 
-                post_id
-        ) pl 
-        ON p.id = pl.post_id 
-        ORDER BY p.id DESC`)
+	user, err := getSessionUser(r)
 	if err != nil {
-		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+		http.Error(w, "Failed to get user", http.StatusInternalServerError)
 		return nil
 	}
-	defer rows.Close()
 
-	var posts []map[string]interface{}
-	for rows.Next() {
-		var id, likes, dislikes int
-		var postName, creatorID, postMessage, category_name string
-		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &category_name, &likes, &dislikes)
-		if err != nil {
-			http.Error(w, "Error scanning post", http.StatusInternalServerError)
-			return nil
-		}
-
-		post := map[string]interface{}{
-			"ID":           id,
-			"PostName":     postName,
-			"CreatorID":    creatorID,
-			"PostMessage":  postMessage,
-			"categoryName": category_name,
-			"LikeCount":    likes,
-			"DislikeCount": dislikes,
-		}
-		posts = append(posts, post)
-	}
-
-	isAdmin := false
-	if rank == "admin" {
-		isAdmin = true
-	}
-
-	data := map[string]interface{}{
-		"Username": username,
-		"Posts":    posts,
-		"Rank":     isAdmin,
+	data := struct {
+		User  string
+		Posts []Post
+	}{
+		User:  user,
+		Posts: posts,
 	}
 
 	return data
 }
 
-func handleLikePost(w http.ResponseWriter, r *http.Request) {
-	userID := getSessionUserID(r)
-	if userID == 0 {
-		http.Error(w, "User not logged in", http.StatusUnauthorized)
-		return
-	}
-
-	postID := r.URL.Query().Get("postID")
-	like := r.URL.Query().Get("like") // "true" for like, "false" for dislike
-
-	if postID == "" || like == "" {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
-
-	liked := like == "true"
-
-	// Check if the user has already liked/disliked the post
-	var existingLikeID int
-	err := db.QueryRow(`SELECT id FROM PostLikes WHERE post_id = ? AND user_id = ?`, postID, userID).Scan(&existingLikeID)
-
-	if err == sql.ErrNoRows {
-		// No existing like/dislike, insert a new one
-		_, err = db.Exec(`INSERT INTO PostLikes (post_id, user_id, liked) VALUES (?, ?, ?)`, postID, userID, liked)
-		if err != nil {
-			http.Error(w, "Error liking post", http.StatusInternalServerError)
-			return
-		}
-	} else if err == nil {
-		// Existing like/dislike found, remove it
-		_, err = db.Exec(`DELETE FROM PostLikes WHERE id = ?`, existingLikeID)
-		if err != nil {
-			http.Error(w, "Error unliking post", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		http.Error(w, "Error checking like status", http.StatusInternalServerError)
-		return
-	}
-
-	// Return the updated like/dislike count for the post
-	var likeCount, dislikeCount int
-	err = db.QueryRow(`SELECT 
-                        (SELECT COUNT(*) FROM PostLikes WHERE post_id = ? AND liked = 1) as likeCount,
-                        (SELECT COUNT(*) FROM PostLikes WHERE post_id = ? AND liked = 0) as dislikeCount`,
-		postID, postID).Scan(&likeCount, &dislikeCount)
+func handleAccount(w http.ResponseWriter) any {
+	db, err := sql.Open("sqlite3", "BDD/DBForum.db")
 	if err != nil {
-		http.Error(w, "Error fetching like/dislike counts", http.StatusInternalServerError)
-		return
+		log.Fatal(err)
 	}
+	defer db.Close()
 
-	response := map[string]int{
-		"likeCount":    likeCount,
-		"dislikeCount": dislikeCount,
-	}
-	jsonResponse, _ := json.Marshal(response)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsonResponse)
-}
-
-func getSessionUserID(r *http.Request) int {
-	cookie, err := r.Cookie("session_token")
+	accounts, err := getAllAccounts(db)
 	if err != nil {
-		return 0
-	}
-
-	sessionToken := cookie.Value
-	sessionsMutex.Lock()
-	username := sessions[sessionToken]
-	sessionsMutex.Unlock()
-
-	if username == "" {
-		return 0
-	}
-
-	var userID int
-	err = db.QueryRow(`SELECT id FROM Account WHERE username = ?`, username).Scan(&userID)
-	if err != nil {
-		return 0
-	}
-	return userID
-}
-
-func handleAccount(w http.ResponseWriter) map[string]interface{} {
-	rows, err := db.Query(`SELECT id, username, rank FROM Account ORDER BY id DESC`)
-	if err != nil {
-		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+		http.Error(w, "Failed to get accounts", http.StatusInternalServerError)
 		return nil
+	}
+
+	data := struct {
+		Accounts []Account
+	}{
+		Accounts: accounts,
+	}
+
+	return data
+}
+
+func getAllAccounts(db *sql.DB) ([]Account, error) {
+	rows, err := db.Query("SELECT id, username, mail, rank FROM Account")
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 
-	var accounts []map[string]interface{}
+	var accounts []Account
 	for rows.Next() {
-		var id int
-		var username, rank string
-		err := rows.Scan(&id, &username, &rank)
-		if err != nil {
-			http.Error(w, "Error scanning post", http.StatusInternalServerError)
-			return nil
-		}
-
-		account := map[string]interface{}{
-			"ID":       id,
-			"Username": username,
-			"Rank":     rank,
+		var account Account
+		if err := rows.Scan(&account.ID, &account.Username, &account.Mail, &account.Rank); err != nil {
+			return nil, err
 		}
 		accounts = append(accounts, account)
 	}
+	return accounts, nil
+}
 
-	data := map[string]interface{}{
-		"Accounts": accounts,
+func getAllPosts(db *sql.DB) ([]Post, error) {
+	rows, err := db.Query("SELECT id, post_name, creator_id, post_message, category_name, likes, dislikes FROM Post")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []Post
+	for rows.Next() {
+		var post Post
+		if err := rows.Scan(&post.ID, &post.PostName, &post.CreatorID, &post.PostMessage, &post.CategoryName, &post.Likes, &post.Dislikes); err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
+type Post struct {
+	ID           int
+	PostName     string
+	CreatorID    int
+	PostMessage  string
+	CategoryName string
+	Likes        int
+	Dislikes     int
+}
+
+type Account struct {
+	ID       int
+	Username string
+	Mail     string
+	Rank     string
+}
+
+func getSessionUser(r *http.Request) (string, error) {
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		return "", err
 	}
 
-	return data
+	sessionsMutex.Lock()
+	defer sessionsMutex.Unlock()
+
+	username, exists := sessions[cookie.Value]
+	if !exists {
+		return "", fmt.Errorf("session not found")
+	}
+
+	return username, nil
+}
+
+func getSessionRank(r *http.Request) (string, error) {
+	user, err := getSessionUser(r)
+	if err != nil {
+		return "", err
+	}
+
+	var rank string
+	query := "SELECT rank FROM Account WHERE username = ?"
+	err = db.QueryRow(query, user).Scan(&rank)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("user not found")
+		}
+		return "", err
+	}
+
+	return rank, nil
+}
+
+func isAuthenticated(r *http.Request) bool {
+	_, err := getSessionUser(r)
+	return err == nil
 }
 
 func handleRankUp(w http.ResponseWriter, r *http.Request) {
@@ -511,33 +485,86 @@ func handleRankUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	username := r.FormValue("username")
+	newRank := r.FormValue("rank")
+
 	updateRankSQL := `UPDATE Account SET rank = ? WHERE username = ?`
-	stmt, err := db.Prepare(updateRankSQL)
+	statement, err := db.Prepare(updateRankSQL)
 	if err != nil {
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
 		return
 	}
-	defer stmt.Close()
+	defer statement.Close()
 
-	// Exécute la commande avec les valeurs fournies
-	_, err = stmt.Exec("Modérateurs", username)
+	_, err = statement.Exec(newRank, username)
 	if err != nil {
+		http.Error(w, "Error updating user rank in database", http.StatusInternalServerError)
 		return
 	}
 
-	return
+	fmt.Fprintf(w, "User %s rank updated to %s successfully!", username, newRank)
 }
 
-func isAuthenticated(r *http.Request) bool {
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		return false
+func handleLikePost(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
 	}
 
-	sessionToken := cookie.Value
-	// Vérifiez le token de session ici
-	// Par exemple, en le comparant avec une valeur stockée en mémoire ou en base de données
+	postID := r.FormValue("post_id")
+	like := r.FormValue("like") == "true"
 
-	return sessionToken != ""
+	username, err := getSessionUser(r)
+	if err != nil {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	err = db.QueryRow("SELECT id FROM Account WHERE username = ?", username).Scan(&userID)
+	if err != nil {
+		http.Error(w, "Error getting user ID", http.StatusInternalServerError)
+		return
+	}
+
+	likeSQL := `INSERT INTO PostLikes (post_id, user_id, liked) VALUES (?, ?, ?)
+		ON CONFLICT(post_id, user_id) DO UPDATE SET liked = excluded.liked`
+	statement, err := db.Prepare(likeSQL)
+	if err != nil {
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(postID, userID, like)
+	if err != nil {
+		http.Error(w, "Error liking post in database", http.StatusInternalServerError)
+		return
+	}
+
+	updatePostLikesSQL := `UPDATE Post SET likes = likes + ?, dislikes = dislikes + ? WHERE id = ?`
+	statement, err = db.Prepare(updatePostLikesSQL)
+	if err != nil {
+		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
+		return
+	}
+	defer statement.Close()
+
+	var likeIncrement, dislikeIncrement int
+	if like {
+		likeIncrement = 1
+		dislikeIncrement = 0
+	} else {
+		likeIncrement = 0
+		dislikeIncrement = 1
+	}
+
+	_, err = statement.Exec(likeIncrement, dislikeIncrement, postID)
+	if err != nil {
+		http.Error(w, "Error updating post likes in database", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Post liked successfully!")
 }
 
 func createPost(w http.ResponseWriter, r *http.Request) {
@@ -546,142 +573,172 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	postName := r.FormValue("postName")
-	creatorID := getSessionUsername(r)
-	postMessage := r.FormValue("postMessage")
-	category_name := r.FormValue("category_name")
+	postName := r.FormValue("post_name")
+	postMessage := r.FormValue("post_message")
+	categoryName := r.FormValue("category_name")
 
-	// Insert the post into the database
-	insertPostSQL := `INSERT INTO Post (post_name, creator_id, post_message, category_name) VALUES (?, ?, ?, ?)`
-	statement, err := db.Prepare(insertPostSQL)
+	username, err := getSessionUser(r)
+	if err != nil {
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	var userID int
+	err = db.QueryRow("SELECT id FROM Account WHERE username = ?", username).Scan(&userID)
+	if err != nil {
+		http.Error(w, "Error getting user ID", http.StatusInternalServerError)
+		return
+	}
+
+	createPostSQL := `INSERT INTO Post (post_name, creator_id, post_message, category_name, likes, dislikes) VALUES (?, ?, ?, ?, 0, 0)`
+	statement, err := db.Prepare(createPostSQL)
 	if err != nil {
 		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
 		return
 	}
 	defer statement.Close()
 
-	result, err := statement.Exec(postName, creatorID, postMessage, category_name)
+	_, err = statement.Exec(postName, userID, postMessage, categoryName)
 	if err != nil {
-		http.Error(w, "Error inserting post into database", http.StatusInternalServerError)
+		http.Error(w, "Error creating post in database", http.StatusInternalServerError)
 		return
 	}
 
-	postID, err := result.LastInsertId()
-	if err != nil {
-		http.Error(w, "Error getting last insert ID", http.StatusInternalServerError)
-		return
-	}
-
-	// Handle the image upload
-	createImage(w, r, postID)
-
-	fmt.Fprintf(w, "Post %s registered successfully!", postName)
+	fmt.Fprintf(w, "Post created successfully!")
 }
 
-func createImage(w http.ResponseWriter, r *http.Request, postID int64) {
+// Ajout d'une route pour récupérer les catégories
+func handleCategories(w http.ResponseWriter, r *http.Request) {
+	db, err := sql.Open("sqlite3", "BDD/DBForum.db")
+	if err != nil {
+		http.Error(w, "Error opening database", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	categories, err := getAllCategories(db)
+	if err != nil {
+		http.Error(w, "Failed to get categories", http.StatusInternalServerError)
+		return
+	}
+
+	data := struct {
+		Categories []string
+	}{
+		Categories: categories,
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, "Failed to marshal data", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonData)
+}
+
+func getAllCategories(db *sql.DB) ([]string, error) {
+	rows, err := db.Query("SELECT name FROM Category")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		categories = append(categories, name)
+	}
+	return categories, nil
+}
+
+func deletePost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Parse the multipart form
-	err := r.ParseMultipartForm(20 << 20) // Limite de 20 MB
+	postID := r.FormValue("post_id")
+
+	username, err := getSessionUser(r)
 	if err != nil {
-		http.Error(w, "Error parsing multipart form", http.StatusInternalServerError)
-		log.Println("Error parsing multipart form:", err)
+		http.Error(w, "User not authenticated", http.StatusUnauthorized)
 		return
 	}
 
-	// Retrieve the file from form data
-	file, handler, err := r.FormFile("postImage")
+	var userID int
+	err = db.QueryRow("SELECT id FROM Account WHERE username = ?", username).Scan(&userID)
 	if err != nil {
-		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
-		log.Println("Error retrieving the file:", err)
-		return
-	}
-	defer file.Close()
-
-	// Save the file to the disk
-	filePath := filepath.Join("uploads/images", handler.Filename)
-	dest, err := os.Create(filePath)
-	if err != nil {
-		http.Error(w, "Error saving the file", http.StatusInternalServerError)
-		log.Println("Error creating the file:", err)
-		return
-	}
-	defer dest.Close()
-	_, err = io.Copy(dest, file)
-	if err != nil {
-		http.Error(w, "Error saving the file", http.StatusInternalServerError)
-		log.Println("Error copying the file:", err)
+		http.Error(w, "Error getting user ID", http.StatusInternalServerError)
 		return
 	}
 
-	// Insert the image link into the Image table
-	insertImageSQL := `INSERT INTO Image (link, post_id) VALUES (?, ?)`
-	statement, err := db.Prepare(insertImageSQL)
+	// Check if the user is the creator of the post
+	var creatorID int
+	err = db.QueryRow("SELECT creator_id FROM Post WHERE id = ?", postID).Scan(&creatorID)
+	if err != nil {
+		http.Error(w, "Error getting post creator ID", http.StatusInternalServerError)
+		return
+	}
+
+	if userID != creatorID {
+		http.Error(w, "User not authorized to delete this post", http.StatusForbidden)
+		return
+	}
+
+	deletePostSQL := `DELETE FROM Post WHERE id = ?`
+	statement, err := db.Prepare(deletePostSQL)
 	if err != nil {
 		http.Error(w, "Error preparing statement", http.StatusInternalServerError)
-		log.Println("Error preparing statement:", err)
 		return
 	}
 	defer statement.Close()
 
-	_, err = statement.Exec(filePath, postID)
+	_, err = statement.Exec(postID)
 	if err != nil {
-		http.Error(w, "Error inserting image link into database", http.StatusInternalServerError)
-		log.Println("Error inserting image link into database:", err)
+		http.Error(w, "Error deleting post from database", http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, "File uploaded successfully: %s\n", handler.Filename)
+	fmt.Fprintf(w, "Post deleted successfully!")
 }
 
-func ensureUploadDir() error {
-	uploadDir := filepath.Join("uploads", "images")
-	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		err := os.MkdirAll(uploadDir, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("failed to create upload directory: %w", err)
+func getPostByID(w http.ResponseWriter, r *http.Request) {
+	postID := r.URL.Query().Get("post_id")
+	if postID == "" {
+		http.Error(w, "Post ID is required", http.StatusBadRequest)
+		return
+	}
+
+	db, err := sql.Open("sqlite3", "BDD/DBForum.db")
+	if err != nil {
+		http.Error(w, "Error opening database", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	var post Post
+	query := "SELECT id, post_name, creator_id, post_message, category_name, likes, dislikes FROM Post WHERE id = ?"
+	err = db.QueryRow(query, postID).Scan(&post.ID, &post.PostName, &post.CreatorID, &post.PostMessage, &post.CategoryName, &post.Likes, &post.Dislikes)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Post not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Error querying database", http.StatusInternalServerError)
 		}
+		return
 	}
-	return nil
-}
 
-func getSessionUsername(r *http.Request) string {
-	cookie, err := r.Cookie("session_token")
+	jsonData, err := json.Marshal(post)
 	if err != nil {
-		return ""
+		http.Error(w, "Failed to marshal data", http.StatusInternalServerError)
+		return
 	}
 
-	sessionToken := cookie.Value
-	sessionsMutex.Lock()
-	username := sessions[sessionToken]
-	sessionsMutex.Unlock()
-
-	return username
-}
-
-func getSessionRank(r *http.Request) (string, error) {
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		return "", err
-	}
-
-	sessionToken := cookie.Value
-	sessionsMutex.Lock()
-	username, exists := sessions[sessionToken]
-	sessionsMutex.Unlock()
-
-	if !exists {
-		return "", fmt.Errorf("session not found")
-	}
-
-	var rank string
-	err = db.QueryRow("SELECT rank FROM Account WHERE username = ?", username).Scan(&rank)
-	if err != nil {
-		return "", err
-	}
-
-	return rank, nil
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonData)
 }
