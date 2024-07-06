@@ -55,12 +55,6 @@ func createTables(db *sql.DB) {
 		log.Fatal(err)
 	}
 
-	dropPostTableSQL := `DROP TABLE IF EXISTS Post`
-	_, err = db.Exec(dropPostTableSQL)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	// Créer la table Post
 	createPostTableSQL := `CREATE TABLE IF NOT EXISTS Post (
         id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
