@@ -21,16 +21,16 @@ var (
 
 func init() {
 	googleOauthConfig = &oauth2.Config{
-		RedirectURL:  "http://localhost:8080/auth/google/callback",
+		RedirectURL:  "http://localhost:8080/auth/google/login",
 		ClientID:     os.Getenv("925685072101-l5lmchrhsk6bd1fa513bd5bou7maifgn.apps.googleusercontent.com"), //ID du Client Google
 		ClientSecret: os.Getenv("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"),                                      //Code secret du Client Google
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"},
 		Endpoint:     google.Endpoint,
 	}
 	githubOauthConfig = &oauth2.Config{
-		RedirectURL:  "http://localhost:8080/auth/github/callback",
-		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
-		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		RedirectURL:  "http://localhost:8080/auth/github/login",
+		ClientID:     os.Getenv("Ov23liSOGHa7aj9ctaty"),
+		ClientSecret: os.Getenv("1ad46c9dddf3747f05ff793fa9f081bf7b8164b9"),
 		Scopes:       []string{"user:email"},
 		Endpoint:     github.Endpoint,
 	}

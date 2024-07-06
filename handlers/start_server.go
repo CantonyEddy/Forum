@@ -191,7 +191,7 @@ func createTables(db *sql.DB) {
 	createAccountTableSQL := `CREATE TABLE IF NOT EXISTS Account (
         id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
-        password TEXT NOT NULL,
+        password TEXT,
         mail TEXT NOT NULL,
         rank TEXT NOT NULL
     );`
