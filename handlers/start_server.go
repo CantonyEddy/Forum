@@ -23,6 +23,7 @@ var tmpl_main_page *template.Template
 var tmpl_admin_pannel *template.Template
 var tmpl_create_poste *template.Template
 var tmpl_profile *template.Template
+var tmpl_post *template.Template
 var db *sql.DB
 var sessions = map[string]string{}
 var sessionsMutex sync.Mutex
@@ -85,6 +86,11 @@ func StartServer() {
 	}
 
 	tmpl_profile, err = template.New("profile").ParseFiles(filepath.Join(wd, "Static", "Templates", "profile.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_post, err = template.New("post").ParseFiles(filepath.Join(wd, "Static", "Templates", "post.html"))
 	if err != nil {
 		panic(err)
 	}
@@ -184,6 +190,9 @@ func StartServer() {
 		}
 	})
 
+	http.HandleFunc("/post/", handlePost)
+	http.HandleFunc("/addComment", handleAddComment)
+
 	http.HandleFunc("/registerUser", handleRegister)
 	http.HandleFunc("/loginUser", handleLogin)
 	http.HandleFunc("/upgradeRank", handleRankUp)
@@ -259,6 +268,19 @@ func createTables(db *sql.DB) {
 		UNIQUE(post_id, user_id)
 	);`
 	_, err = db.Exec(createLikeTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	createCommentTableSQL := `CREATE TABLE IF NOT EXISTS Commentaire (
+		id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+		post_id INTEGER NOT NULL,
+		user_id INTEGER NOT NULL,
+		message TEXT NOT NULL,
+		FOREIGN KEY (post_id) REFERENCES Post(id),
+		FOREIGN KEY (user_id) REFERENCES Account(id)
+	);`
+	_, err = db.Exec(createCommentTableSQL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -870,4 +892,101 @@ func getUserIDByUsername(username string) int {
 		return 0 // Handle this case appropriately
 	}
 	return userID
+}
+
+func handlePost(w http.ResponseWriter, r *http.Request) {
+	postID := strings.TrimPrefix(r.URL.Path, "/post/")
+	if postID == "" {
+		http.Error(w, "Post ID manquant", http.StatusBadRequest)
+		return
+	}
+
+	var post struct {
+		ID              int
+		PostName        string
+		CreatorUsername string
+		PostMessage     string
+		CategoryName    string
+		Likes           int
+		Dislikes        int
+		Comments        []Comment
+	}
+
+	query := `SELECT p.id, p.post_name, a.username AS creator_username, p.post_message, p.category_name, 
+              (SELECT COUNT(*) FROM PostLikes WHERE post_id = p.id AND liked = 1) AS likes,
+              (SELECT COUNT(*) FROM PostLikes WHERE post_id = p.id AND liked = 0) AS dislikes
+              FROM Post p
+              JOIN Account a ON p.creator_id = a.id
+              WHERE p.id = ?`
+
+	err := db.QueryRow(query, postID).Scan(&post.ID, &post.PostName, &post.CreatorUsername, &post.PostMessage, &post.CategoryName, &post.Likes, &post.Dislikes)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Post non trouvé", http.StatusNotFound)
+		} else {
+			http.Error(w, "Erreur lors de la récupération du post", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Récupérer les commentaires associés au post
+	rows, err := db.Query(`SELECT c.id, c.message, a.username FROM Commentaire c JOIN Account a ON c.user_id = a.id WHERE c.post_id = ?`, postID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des commentaires", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var comments []Comment
+	for rows.Next() {
+		var comment Comment
+		err := rows.Scan(&comment.ID, &comment.Message, &comment.Username)
+		if err != nil {
+			http.Error(w, "Erreur lors de l'analyse des commentaires", http.StatusInternalServerError)
+			return
+		}
+		comments = append(comments, comment)
+	}
+
+	post.Comments = comments
+
+	err = tmpl_post.Execute(w, post)
+	if err != nil {
+		http.Error(w, "Erreur lors du rendu du template", http.StatusInternalServerError)
+	}
+}
+
+type Comment struct {
+	ID       int
+	Message  string
+	Username string
+}
+
+func handleAddComment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Méthode de requête non valide", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getSessionUserID(r)
+	if userID == 0 {
+		http.Error(w, "Utilisateur non connecté", http.StatusUnauthorized)
+		return
+	}
+
+	postID := r.FormValue("postID")
+	message := r.FormValue("message")
+
+	if postID == "" || message == "" {
+		http.Error(w, "Paramètres manquants", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec(`INSERT INTO Commentaire (post_id, user_id, message) VALUES (?, ?, ?)`, postID, userID, message)
+	if err != nil {
+		http.Error(w, "Erreur lors de l'ajout du commentaire", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/post/"+postID, http.StatusSeeOther)
 }

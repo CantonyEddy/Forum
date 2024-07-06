@@ -1,0 +1,54 @@
+{{ define "post" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.PostName}}</title>
+    <script>
+        async function likePost(postID, like) {
+            const response = await fetch(`/likePost?postID=${postID}&like=${like}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById(`likeCount-${postID}`).textContent = data.likeCount;
+                document.getElementById(`dislikeCount-${postID}`).textContent = data.dislikeCount;
+            } else {
+                console.error('Failed to like/dislike post');
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>{{.PostName}}</h1>
+    <p>Par {{.CreatorUsername}} dans la catégorie {{.CategoryName}}</p>
+    <p>{{.PostMessage}}</p>
+    <button onclick="likePost({{.ID}}, true)">Like</button>
+    <button onclick="likePost({{.ID}}, false)">Dislike</button>
+    <p>Likes: <span id="likeCount-{{.ID}}">{{.Likes}}</span></p>
+    <p>Dislikes: <span id="dislikeCount-{{.ID}}">{{.Dislikes}}</span></p>
+    <!-- Ajoutez les boutons de like et dislike ici -->
+    <h2>Ajouter un commentaire</h2>
+    <form action="/addComment" method="post">
+        <input type="hidden" name="postID" value="{{.ID}}">
+        <textarea name="message" rows="4" cols="50" required></textarea><br>
+        <button type="submit">Ajouter</button>
+    </form>
+
+    <!-- Afficher les commentaires existants -->
+    <h2>Commentaires</h2>
+    {{range .Comments}}
+    <div class="comment">
+        <p><strong>{{.Username}}:</strong> {{.Message}}</p>
+    </div>
+    {{else}}
+    <p>Aucun commentaire pour le moment.</p>
+    {{end}}
+</body>
+</html>
+{{end}}

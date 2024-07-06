@@ -33,7 +33,9 @@
     <a href="/createPost" class="button">+Create Post</a>
     {{range .Posts}}
     <div class="post">
-        <h2>{{.PostName}}</h2>
+        <a href="/post/{{.ID}}">
+            <h2>{{.PostName}}</h2>
+        </a>
         <p>{{.PostMessage}}</p>
         <button onclick="likePost({{.ID}}, true)">Like</button>
         <button onclick="likePost({{.ID}}, false)">Dislike</button>
