@@ -190,6 +190,11 @@ func StartServer() {
 	http.HandleFunc("/addPost", createPost)
 	http.HandleFunc("/likePost", handleLikePost)
 
+	http.HandleFunc("/auth/google/login", HandleGoogleLogin)
+	http.HandleFunc("/auth/google/callback", HandleGoogleCallback)
+	http.HandleFunc("/auth/github/login", HandleGitHubLogin)
+	http.HandleFunc("/auth/github/callback", HandleGitHubCallback)
+
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
 	if err1 != nil {
