@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
@@ -20,19 +21,43 @@ var (
 )
 
 func init() {
+	loadEnv()
+
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+
+	if googleClientID == "" || googleClientSecret == "" {
+		log.Fatal("Google OAuth credentials are not set in environment variables")
+	}
+
 	googleOauthConfig = &oauth2.Config{
-		RedirectURL:  "http://localhost:8080/auth/google/login",
-		ClientID:     os.Getenv("925685072101-l5lmchrhsk6bd1fa513bd5bou7maifgn.apps.googleusercontent.com"), //ID du Client Google
-		ClientSecret: os.Getenv("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"),                                      //Code secret du Client Google
+		RedirectURL:  "http://localhost:8080/auth/google/callback",
+		ClientID:     googleClientID,
+		ClientSecret: googleClientSecret,
 		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"},
 		Endpoint:     google.Endpoint,
 	}
+
+	githubClientID := os.Getenv("GITHUB_CLIENT_ID")
+	githubClientSecret := os.Getenv("GITHUB_CLIENT_SECRET")
+
+	if githubClientID == "" || githubClientSecret == "" {
+		log.Fatal("GitHub OAuth credentials are not set in environment variables")
+	}
+
 	githubOauthConfig = &oauth2.Config{
-		RedirectURL:  "http://localhost:8080/auth/github/login",
-		ClientID:     os.Getenv("Ov23liSOGHa7aj9ctaty"),
-		ClientSecret: os.Getenv("1ad46c9dddf3747f05ff793fa9f081bf7b8164b9"),
+		RedirectURL:  "http://localhost:8080/auth/github/callback",
+		ClientID:     githubClientID,
+		ClientSecret: githubClientSecret,
 		Scopes:       []string{"user:email"},
 		Endpoint:     github.Endpoint,
+	}
+}
+
+func loadEnv() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
 	}
 }
 
