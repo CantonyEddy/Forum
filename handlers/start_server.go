@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +22,8 @@ var tmpl_login *template.Template
 var tmpl_main_page *template.Template
 var tmpl_admin_pannel *template.Template
 var tmpl_create_poste *template.Template
-var tmpl_create_image *template.Template
+var tmpl_profile *template.Template
+var tmpl_post *template.Template
 var db *sql.DB
 var sessions = map[string]string{}
 var sessionsMutex sync.Mutex
@@ -81,6 +81,16 @@ func StartServer() {
 	}
 
 	tmpl_create_poste, err = template.New("createPost").ParseFiles(filepath.Join(wd, "Static", "Templates", "createPost.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_profile, err = template.New("profile").ParseFiles(filepath.Join(wd, "Static", "Templates", "profile.html"))
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl_post, err = template.New("post").ParseFiles(filepath.Join(wd, "Static", "Templates", "post.html"))
 	if err != nil {
 		panic(err)
 	}
@@ -171,6 +181,17 @@ func StartServer() {
 		}
 	})
 
+	http.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/profile" {
+			data := handleProfile(w, r)
+			tmpl_profile.Execute(w, data)
+		} else {
+			fileServer.ServeHTTP(w, r)
+		}
+	})
+
+	http.HandleFunc("/post/", handlePost)
+	http.HandleFunc("/addComment", handleAddComment)
 	http.HandleFunc("/registerUser", handleRegister)
 	http.HandleFunc("/loginUser", handleLogin)
 	http.HandleFunc("/upgradeRank", handleRankUp)
@@ -185,6 +206,18 @@ func StartServer() {
 }
 
 func createTables(db *sql.DB) {
+	/*dropPostTableSQL := `DROP TABLE IF EXISTS Post;`
+	_, err := db.Exec(dropPostTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dropLikeTableSQL := `DROP TABLE IF EXISTS PostLikes;`
+	_, err = db.Exec(dropLikeTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}*/
+
 	createAccountTableSQL := `CREATE TABLE IF NOT EXISTS Account (
         id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
@@ -234,6 +267,19 @@ func createTables(db *sql.DB) {
 		UNIQUE(post_id, user_id)
 	);`
 	_, err = db.Exec(createLikeTableSQL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	createCommentTableSQL := `CREATE TABLE IF NOT EXISTS Commentaire (
+		id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+		post_id INTEGER NOT NULL,
+		user_id INTEGER NOT NULL,
+		message TEXT NOT NULL,
+		FOREIGN KEY (post_id) REFERENCES Post(id),
+		FOREIGN KEY (user_id) REFERENCES Account(id)
+	);`
+	_, err = db.Exec(createCommentTableSQL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -315,6 +361,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }
+
 func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	username := getSessionUsername(r)
 	rank, err := getSessionRank(r)
@@ -331,8 +378,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
             p.post_message, 
             p.category_name, 
             IFNULL(likeCount, 0) as likeCount, 
-            IFNULL(dislikeCount, 0) as dislikeCount,
-            IFNULL(i.link, '') as imageLink
+            IFNULL(dislikeCount, 0) as dislikeCount
         FROM 
             Post p 
         LEFT JOIN (
@@ -345,15 +391,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
             GROUP BY 
                 post_id
         ) pl 
-        ON p.id = pl.post_id
-        LEFT JOIN (
-            SELECT 
-                post_id, 
-                link 
-            FROM 
-                Image
-        ) i
-        ON p.id = i.post_id 
+        ON p.id = pl.post_id 
         ORDER BY p.id DESC`)
 	if err != nil {
 		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
@@ -364,17 +402,10 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	var posts []map[string]interface{}
 	for rows.Next() {
 		var id, likes, dislikes int
-		var postName, creatorID, postMessage, categoryName, imageLink string
-		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &categoryName, &likes, &dislikes, &imageLink)
+		var postName, creatorID, postMessage, category_name string
+		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &category_name, &likes, &dislikes)
 		if err != nil {
 			http.Error(w, "Error scanning post", http.StatusInternalServerError)
-			return nil
-		}
-
-		// Décoder les liens d'image
-		decodedImageLink, err := decodeURL(imageLink)
-		if err != nil {
-			http.Error(w, "Error decoding image link", http.StatusInternalServerError)
 			return nil
 		}
 
@@ -383,10 +414,9 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 			"PostName":     postName,
 			"CreatorID":    creatorID,
 			"PostMessage":  postMessage,
-			"CategoryName": categoryName,
+			"categoryName": category_name,
 			"LikeCount":    likes,
 			"DislikeCount": dislikes,
-			"ImageLink":    decodedImageLink,
 		}
 		posts = append(posts, post)
 	}
@@ -405,14 +435,127 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	return data
 }
 
-func decodeURL(encodedURL string) (string, error) {
-	decodedURL, err := url.QueryUnescape(encodedURL)
+func handleProfile(w http.ResponseWriter, r *http.Request) map[string]interface{} {
+	username := getSessionUsername(r)
+	userID := getUserIDByUsername(username)
+
+	// Requête SQL pour récupérer les posts aimés par l'utilisateur
+	query := `
+        SELECT 
+            p.id, 
+            p.post_name, 
+            p.creator_id, 
+            p.post_message, 
+            p.category_name, 
+            p.likes, 
+            p.dislikes
+        FROM 
+            Post p
+        LEFT JOIN 
+            PostLikes pl ON p.id = pl.post_id
+        WHERE 
+            pl.user_id = ? AND pl.liked = 1
+        ORDER BY 
+            p.id DESC`
+
+	rows, err := db.Query(query, userID)
 	if err != nil {
-		return "", err
+		log.Printf("Error fetching posts: %v", err)
+		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+		return nil
 	}
-	// Remplacer les barres obliques inverses par des barres obliques
-	decodedURL = strings.ReplaceAll(decodedURL, "\\", "/")
-	return decodedURL, nil
+	defer rows.Close()
+
+	var postsLike []map[string]interface{}
+	for rows.Next() {
+		var id, likes, dislikes int
+		var postName, postMessage, categoryName string
+		var creatorID int // creatorID should be an int as it references Account(id)
+		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &categoryName, &likes, &dislikes)
+		if err != nil {
+			log.Printf("Error scanning post: %v", err)
+			http.Error(w, "Error scanning post", http.StatusInternalServerError)
+			return nil
+		}
+
+		post := map[string]interface{}{
+			"ID":           id,
+			"PostName":     postName,
+			"CreatorID":    creatorID,
+			"PostMessage":  postMessage,
+			"CategoryName": categoryName,
+			"Likes":        likes,
+			"Dislikes":     dislikes,
+		}
+		postsLike = append(postsLike, post)
+	}
+
+	// Récupérer les postes de la base de données
+	rows, err = db.Query(`SELECT 
+            p.id, 
+            p.post_name, 
+            p.creator_id, 
+            p.post_message, 
+            p.category_name, 
+            IFNULL(likeCount, 0) as likeCount, 
+            IFNULL(dislikeCount, 0) as dislikeCount
+        FROM 
+            Post p 
+        LEFT JOIN (
+            SELECT 
+                post_id, 
+                SUM(CASE WHEN liked = 1 THEN 1 ELSE 0 END) as likeCount, 
+                SUM(CASE WHEN liked = 0 THEN 1 ELSE 0 END) as dislikeCount 
+            FROM 
+                PostLikes 
+            GROUP BY 
+                post_id
+        ) pl 
+        ON p.id = pl.post_id 
+        ORDER BY p.id DESC`)
+	if err != nil {
+		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+		return nil
+	}
+	defer rows.Close()
+	isEqID := false
+
+	var posts []map[string]interface{}
+	for rows.Next() {
+		var id, likes, dislikes, creatorID int
+		var postName, postMessage, category_name string
+		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &category_name, &likes, &dislikes)
+		if err != nil {
+			http.Error(w, "Error scanning post", http.StatusInternalServerError)
+			return nil
+		}
+
+		if userID == creatorID {
+			isEqID = true
+		} else {
+			isEqID = false
+		}
+		post := map[string]interface{}{
+			"ID":           id,
+			"PostName":     postName,
+			"CreatorID":    creatorID,
+			"PostMessage":  postMessage,
+			"categoryName": category_name,
+			"LikeCount":    likes,
+			"DislikeCount": dislikes,
+			"IsEqID":       isEqID,
+		}
+		posts = append(posts, post)
+	}
+
+	data := map[string]interface{}{
+		"Username":  username,
+		"Posts":     posts,
+		"PostsLike": postsLike,
+		"UserId":    userID,
+	}
+
+	return data
 }
 
 func handleLikePost(w http.ResponseWriter, r *http.Request) {
@@ -434,7 +577,8 @@ func handleLikePost(w http.ResponseWriter, r *http.Request) {
 
 	// Check if the user has already liked/disliked the post
 	var existingLikeID int
-	err := db.QueryRow(`SELECT id FROM PostLikes WHERE post_id = ? AND user_id = ?`, postID, userID).Scan(&existingLikeID)
+	var existingLiked bool
+	err := db.QueryRow(`SELECT id, liked FROM PostLikes WHERE post_id = ? AND user_id = ?`, postID, userID).Scan(&existingLikeID, &existingLiked)
 
 	if err == sql.ErrNoRows {
 		// No existing like/dislike, insert a new one
@@ -444,16 +588,28 @@ func handleLikePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if err == nil {
-		// Existing like/dislike found, remove it
-		_, err = db.Exec(`DELETE FROM PostLikes WHERE id = ?`, existingLikeID)
-		if err != nil {
-			http.Error(w, "Error unliking post", http.StatusInternalServerError)
-			return
+		if existingLiked == liked {
+			// Existing like/dislike found and matches the current action, remove it (toggle off)
+			_, err = db.Exec(`DELETE FROM PostLikes WHERE id = ?`, existingLikeID)
+			if err != nil {
+				http.Error(w, "Error unliking post", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			// Existing like/dislike found but does not match the current action, update it (toggle switch)
+			_, err = db.Exec(`UPDATE PostLikes SET liked = ? WHERE id = ?`, liked, existingLikeID)
+			if err != nil {
+				http.Error(w, "Error updating like status", http.StatusInternalServerError)
+				return
+			}
 		}
 	} else {
 		http.Error(w, "Error checking like status", http.StatusInternalServerError)
 		return
 	}
+
+	// Update the likes and dislikes in the Post table
+	updatePostLikes(postID)
 
 	// Return the updated like/dislike count for the post
 	var likeCount, dislikeCount int
@@ -473,6 +629,18 @@ func handleLikePost(w http.ResponseWriter, r *http.Request) {
 	jsonResponse, _ := json.Marshal(response)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonResponse)
+}
+
+func updatePostLikes(postID string) {
+	_, err := db.Exec(`
+        UPDATE Post
+        SET likes = (SELECT COUNT(*) FROM PostLikes WHERE post_id = ? AND liked = 1),
+            dislikes = (SELECT COUNT(*) FROM PostLikes WHERE post_id = ? AND liked = 0)
+        WHERE id = ?
+    `, postID, postID, postID)
+	if err != nil {
+		log.Printf("Error updating post likes: %v", err)
+	}
 }
 
 func getSessionUserID(r *http.Request) int {
@@ -573,8 +741,10 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username := getSessionUsername(r)
+
 	postName := r.FormValue("postName")
-	creatorID := getSessionUsername(r)
+	creatorID := getUserIDByUsername(username)
 	postMessage := r.FormValue("postMessage")
 	category_name := r.FormValue("category_name")
 
@@ -711,4 +881,111 @@ func getSessionRank(r *http.Request) (string, error) {
 	}
 
 	return rank, nil
+}
+
+func getUserIDByUsername(username string) int {
+	var userID int
+	err := db.QueryRow("SELECT id FROM Account WHERE username = ?", username).Scan(&userID)
+	if err != nil {
+		log.Println("Error fetching user ID:", err)
+		return 0 // Handle this case appropriately
+	}
+	return userID
+}
+
+func handlePost(w http.ResponseWriter, r *http.Request) {
+	postID := strings.TrimPrefix(r.URL.Path, "/post/")
+	if postID == "" {
+		http.Error(w, "Post ID manquant", http.StatusBadRequest)
+		return
+	}
+
+	var post struct {
+		ID              int
+		PostName        string
+		CreatorUsername string
+		PostMessage     string
+		CategoryName    string
+		Likes           int
+		Dislikes        int
+		Comments        []Comment
+	}
+
+	query := `SELECT p.id, p.post_name, a.username AS creator_username, p.post_message, p.category_name, 
+              (SELECT COUNT(*) FROM PostLikes WHERE post_id = p.id AND liked = 1) AS likes,
+              (SELECT COUNT(*) FROM PostLikes WHERE post_id = p.id AND liked = 0) AS dislikes
+              FROM Post p
+              JOIN Account a ON p.creator_id = a.id
+              WHERE p.id = ?`
+
+	err := db.QueryRow(query, postID).Scan(&post.ID, &post.PostName, &post.CreatorUsername, &post.PostMessage, &post.CategoryName, &post.Likes, &post.Dislikes)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Post non trouvé", http.StatusNotFound)
+		} else {
+			http.Error(w, "Erreur lors de la récupération du post", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Récupérer les commentaires associés au post
+	rows, err := db.Query(`SELECT c.id, c.message, a.username FROM Commentaire c JOIN Account a ON c.user_id = a.id WHERE c.post_id = ?`, postID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des commentaires", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var comments []Comment
+	for rows.Next() {
+		var comment Comment
+		err := rows.Scan(&comment.ID, &comment.Message, &comment.Username)
+		if err != nil {
+			http.Error(w, "Erreur lors de l'analyse des commentaires", http.StatusInternalServerError)
+			return
+		}
+		comments = append(comments, comment)
+	}
+
+	post.Comments = comments
+
+	err = tmpl_post.Execute(w, post)
+	if err != nil {
+		http.Error(w, "Erreur lors du rendu du template", http.StatusInternalServerError)
+	}
+}
+
+type Comment struct {
+	ID       int
+	Message  string
+	Username string
+}
+
+func handleAddComment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Méthode de requête non valide", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getSessionUserID(r)
+	if userID == 0 {
+		http.Error(w, "Utilisateur non connecté", http.StatusUnauthorized)
+		return
+	}
+
+	postID := r.FormValue("postID")
+	message := r.FormValue("message")
+
+	if postID == "" || message == "" {
+		http.Error(w, "Paramètres manquants", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec(`INSERT INTO Commentaire (post_id, user_id, message) VALUES (?, ?, ?)`, postID, userID, message)
+	if err != nil {
+		http.Error(w, "Erreur lors de l'ajout du commentaire", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/post/"+postID, http.StatusSeeOther)
 }
