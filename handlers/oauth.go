@@ -226,13 +226,23 @@ func HandleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := http.Get("https://api.github.com/user?access_token=" + token.AccessToken)
+	// Créer une nouvelle requête HTTP avec le jeton d'accès dans l'en-tête Authorization
+	req, err := http.NewRequest("GET", "https://api.github.com/user", nil)
+	if err != nil {
+		log.Println("failed to create request: ", err)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	req.Header.Set("Authorization", "token "+token.AccessToken)
+
+	client := &http.Client{}
+	response, err := client.Do(req)
 	if err != nil {
 		log.Println("failed getting user info: ", err)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
-
 	defer response.Body.Close()
 
 	var userInfo map[string]interface{}
