@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -24,8 +23,6 @@ var tmpl_admin_pannel *template.Template
 var tmpl_create_poste *template.Template
 var tmpl_profile *template.Template
 var db *sql.DB
-var sessions = map[string]string{}
-var sessionsMutex sync.Mutex
 
 func StartServer() {
 	var err error
@@ -218,7 +215,7 @@ func createTables(db *sql.DB) {
 	createAccountTableSQL := `CREATE TABLE IF NOT EXISTS Account (
         id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
-        password TEXT NOT NULL,
+        password TEXT,
         mail TEXT NOT NULL,
         rank TEXT NOT NULL
     );`
@@ -348,8 +345,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	username := getSessionUsername(r)
+	fmt.Println(username)
 	rank, err := getSessionRank(r)
 	if err != nil {
+		fmt.Println(err)
 		http.Error(w, "Error getting rank", http.StatusInternalServerError)
 		return nil
 	}
@@ -844,22 +843,14 @@ func getSessionUsername(r *http.Request) string {
 }
 
 func getSessionRank(r *http.Request) (string, error) {
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		return "", err
-	}
+	loggedIn, username := isUserLoggedIn(r)
 
-	sessionToken := cookie.Value
-	sessionsMutex.Lock()
-	username, exists := sessions[sessionToken]
-	sessionsMutex.Unlock()
-
-	if !exists {
+	if !loggedIn {
 		return "", fmt.Errorf("session not found")
 	}
 
 	var rank string
-	err = db.QueryRow("SELECT rank FROM Account WHERE username = ?", username).Scan(&rank)
+	err := db.QueryRow("SELECT rank FROM Account WHERE username = ?", username).Scan(&rank)
 	if err != nil {
 		return "", err
 	}
@@ -875,4 +866,25 @@ func getUserIDByUsername(username string) int {
 		return 0 // Handle this case appropriately
 	}
 	return userID
+}
+
+func initCookie(w http.ResponseWriter, r *http.Request, username string) {
+	sessionToken := fmt.Sprintf("%d", time.Now().UnixNano())
+	sessionsMutex.Lock()
+	sessions[sessionToken] = username
+	sessionsMutex.Unlock()
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+	})
+
+	// Vérifiez que le cookie de session est bien initialisé
+	loggedIn, username := isUserLoggedIn(r)
+	if !loggedIn {
+		http.Error(w, "Failed to initialize session", http.StatusInternalServerError)
+		return
+	}
 }
