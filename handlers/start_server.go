@@ -204,7 +204,7 @@ func StartServer() {
 	http.HandleFunc("/auth/github/callback", HandleGitHubCallback)
 
 	fmt.Println("Pour accéder à la page web -> https://localhost:8080/")
-	err = http.ListenAndServeTLS(":8080", "C:/Users/vieil/Documents/cours git/ForumDocker/Forum/server.crt", "C:/Users/vieil/Documents/cours git/ForumDocker/Forum/server.key", nil)
+	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatal("ListenAndServeTLS: ", err)
 	}
