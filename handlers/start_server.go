@@ -192,7 +192,6 @@ func StartServer() {
 
 	http.HandleFunc("/post/", handlePost)
 	http.HandleFunc("/addComment", handleAddComment)
-
 	http.HandleFunc("/registerUser", handleRegister)
 	http.HandleFunc("/loginUser", handleLogin)
 	http.HandleFunc("/upgradeRank", handleRankUp)
