@@ -31,6 +31,32 @@
     {{end}}
     <a href="/profile" class="button">Profile</a>
     <a href="/createPost" class="button">+Create Post</a>
+    <form method="get" action="/Forum">
+        <label for="category">Filtrer par catégorie :</label>
+        <select id="category" name="category">
+            <option value="">Toutes les catégories</option>
+            <option value="Minecraft">Minecraft</option>
+            <option value="Build">Build</option>
+            <option value="Mod Weapon">Mod Weapon</option>
+            <option value="Factory">Factory</option>
+            <option value="Mod Creature">Mod Creature</option>
+            <option value="Server">Server</option>
+            <option value="Mod Ore">Mod Ore</option>
+            <option value="Mod Maps/Bioms">Mod Maps/Bioms</option>
+            <option value="Mod Structure">Mod Structure</option>
+            <option value="Mod Tools">Mod Tools</option>
+            <option value="Mod Magic">Mod Magic</option>
+            <option value="SpeedRun">SpeedRun</option>
+            <option value="Survival">Survival</option>
+            <option value="Creative">Creative</option>
+            <!-- Ajoutez d'autres options de catégories ici -->
+        </select>
+        <button type="submit">Filtrer</button>
+    </form>
+    <div>
+        <a href="/Forum?sort=likes_asc">Trier par nombre de likes (croissant)</a>
+        <a href="/Forum?sort=likes_desc">Trier par nombre de likes (décroissant)</a>
+    </div>
     {{range .Posts}}
     <div class="post">
         <a href="/post/{{.ID}}">
@@ -41,6 +67,12 @@
         <button onclick="likePost({{.ID}}, false)">Dislike</button>
         <p>Likes: <span id="likeCount-{{.ID}}">{{.LikeCount}}</span></p>
         <p>Dislikes: <span id="dislikeCount-{{.ID}}">{{.DislikeCount}}</span></p>
+        {{if .rank}}
+        <form action="/deletePost" method="POST">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button type="submit" class="delete-button">Supprimer</button>
+        </form>
+        {{end}}
     </div>
     {{end}}
 </body>
