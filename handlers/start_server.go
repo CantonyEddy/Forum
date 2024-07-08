@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -25,8 +24,6 @@ var tmpl_create_poste *template.Template
 var tmpl_profile *template.Template
 var tmpl_post *template.Template
 var db *sql.DB
-var sessions = map[string]string{}
-var sessionsMutex sync.Mutex
 
 func StartServer() {
 	var err error
@@ -198,6 +195,11 @@ func StartServer() {
 	http.HandleFunc("/addPost", createPost)
 	http.HandleFunc("/likePost", handleLikePost)
 
+	http.HandleFunc("/auth/google/login", HandleGoogleLogin)
+	http.HandleFunc("/auth/google/callback", HandleGoogleCallback)
+	http.HandleFunc("/auth/github/login", HandleGitHubLogin)
+	http.HandleFunc("/auth/github/callback", HandleGitHubCallback)
+
 	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err1 := http.ListenAndServe(":8080", nil)
 	if err1 != nil {
@@ -206,26 +208,26 @@ func StartServer() {
 }
 
 func createTables(db *sql.DB) {
-	/*dropPostTableSQL := `DROP TABLE IF EXISTS Post;`
+	dropPostTableSQL := `DROP TABLE IF EXISTS Account;`
 	_, err := db.Exec(dropPostTableSQL)
 	if err != nil {
 		log.Fatal(err)
-	}
+	} /*
 
-	dropLikeTableSQL := `DROP TABLE IF EXISTS PostLikes;`
-	_, err = db.Exec(dropLikeTableSQL)
-	if err != nil {
-		log.Fatal(err)
-	}*/
+		dropLikeTableSQL := `DROP TABLE IF EXISTS PostLikes;`
+		_, err = db.Exec(dropLikeTableSQL)
+		if err != nil {
+			log.Fatal(err)
+		}*/
 
 	createAccountTableSQL := `CREATE TABLE IF NOT EXISTS Account (
         id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
-        password TEXT NOT NULL,
+        password TEXT,
         mail TEXT NOT NULL,
         rank TEXT NOT NULL
     );`
-	_, err := db.Exec(createAccountTableSQL)
+	_, err = db.Exec(createAccountTableSQL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -364,8 +366,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 	username := getSessionUsername(r)
+	fmt.Println(username)
 	rank, err := getSessionRank(r)
 	if err != nil {
+		fmt.Println(err)
 		http.Error(w, "Error getting rank", http.StatusInternalServerError)
 		return nil
 	}
@@ -860,22 +864,14 @@ func getSessionUsername(r *http.Request) string {
 }
 
 func getSessionRank(r *http.Request) (string, error) {
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		return "", err
-	}
+	loggedIn, username := isUserLoggedIn(r)
 
-	sessionToken := cookie.Value
-	sessionsMutex.Lock()
-	username, exists := sessions[sessionToken]
-	sessionsMutex.Unlock()
-
-	if !exists {
+	if !loggedIn {
 		return "", fmt.Errorf("session not found")
 	}
 
 	var rank string
-	err = db.QueryRow("SELECT rank FROM Account WHERE username = ?", username).Scan(&rank)
+	err := db.QueryRow("SELECT rank FROM Account WHERE username = ?", username).Scan(&rank)
 	if err != nil {
 		return "", err
 	}
