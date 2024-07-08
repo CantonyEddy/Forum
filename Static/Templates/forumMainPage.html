@@ -1,31 +1,17 @@
 {{ define "Forum" }}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<script>
-    async function likePost(postID, like) {
-        const response = await fetch(`/likePost?postID=${postID}&like=${like}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" type="text/css" href="/Static/CSS/forumMainPage.css">
+        <title>Title</title>
 
-        if (response.ok) {
-            const data = await response.json();
-            document.getElementById(`likeCount-${postID}`).textContent = data.likeCount;
-            document.getElementById(`dislikeCount-${postID}`).textContent = data.dislikeCount;
-        } else {
-            console.error('Failed to like/dislike post');
-        }
-    }
-</script>
-<body>
-    <h1>Welcome, {{.Username}}!</h1>
-    <h1>Bienvenue sur le forum</h1>
+    </head>
+    <body>
+        <div class="topbar">
+            <h1>Welcome, {{.Username}}!</h1>
+            <h1>Bienvenue sur le forum</h1>
+        </div>
     {{if .Rank}}
         <a href="/adminPannel" class="button">admin pannel</a>
     {{end}}
@@ -58,23 +44,44 @@
         <a href="/Forum?sort=likes_desc">Trier par nombre de likes (décroissant)</a>
     </div>
     {{range .Posts}}
-    <div class="post">
-        <a href="/post/{{.ID}}">
-            <h2>{{.PostName}}</h2>
-        </a>
-        <p>{{.PostMessage}}</p>
-        <button onclick="likePost({{.ID}}, true)">Like</button>
-        <button onclick="likePost({{.ID}}, false)">Dislike</button>
-        <p>Likes: <span id="likeCount-{{.ID}}">{{.LikeCount}}</span></p>
-        <p>Dislikes: <span id="dislikeCount-{{.ID}}">{{.DislikeCount}}</span></p>
-        {{if .rank}}
-        <form action="/deletePost" method="POST">
-            <input type="hidden" name="id" value="{{.ID}}">
-            <button type="submit" class="delete-button">Supprimer</button>
-        </form>
-        {{end}}
-    </div>
+        <div class="post">
+            <a href="/post/{{.ID}}">
+                <h2>{{.PostName}}</h2>
+            </a>
+            <p>{{.PostMessage}}</p>
+            {{if .ImageLink}}
+                <img src="../{{.ImageLink}}" alt="Post Image">
+            {{end}}
+            <button onclick="likePost({{.ID}}, true)" class="like">Like</button>
+            <button onclick="likePost({{.ID}}, false)" class="like">Dislike</button>
+            <p>Likes: <span id="likeCount-{{.ID}}">{{.LikeCount}}</span></p>
+            <p>Dislikes: <span id="dislikeCount-{{.ID}}">{{.DislikeCount}}</span></p>
+            {{if .rank}}
+            <form action="/deletePost" method="POST">
+                <input type="hidden" name="id" value="{{.ID}}">
+                <button type="submit" class="delete-button">Supprimer</button>
+            </form>
+            {{end}}
+        </div>
     {{end}}
-</body>
-</html>
+    </body>
+    <script>
+        async function likePost(postID, like) {
+            const response = await fetch(`/likePost?postID=${postID}&like=${like}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById(`likeCount-${postID}`).textContent = data.likeCount;
+                document.getElementById(`dislikeCount-${postID}`).textContent = data.dislikeCount;
+            } else {
+                console.error('Failed to like/dislike post');
+            }
+        }
+    </script>
+    </html>
 {{ end }}

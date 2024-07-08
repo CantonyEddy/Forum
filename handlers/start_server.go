@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -400,7 +401,8 @@ func handleHome(w http.ResponseWriter, r *http.Request, category string) map[str
             p.post_message, 
             p.category_name, 
             IFNULL(likeCount, 0) as likeCount, 
-            IFNULL(dislikeCount, 0) as dislikeCount
+            IFNULL(dislikeCount, 0) as dislikeCount,
+            IFNULL(i.link, '') as imageLink
         FROM 
             Post p 
         LEFT JOIN (
@@ -413,7 +415,15 @@ func handleHome(w http.ResponseWriter, r *http.Request, category string) map[str
             GROUP BY 
                 post_id
         ) pl 
-        ON p.id = pl.post_id`
+        ON p.id = pl.post_id
+        LEFT JOIN (
+            SELECT 
+                post_id, 
+                link 
+            FROM 
+                Image
+        ) i
+        ON p.id = i.post_id`
 
 	var rows *sql.Rows
 
@@ -444,10 +454,17 @@ func handleHome(w http.ResponseWriter, r *http.Request, category string) map[str
 	var posts []map[string]interface{}
 	for rows.Next() {
 		var id, likes, dislikes int
-		var postName, creatorID, postMessage, categoryName string
-		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &categoryName, &likes, &dislikes)
+		var postName, creatorID, postMessage, categoryName, imageLink string
+		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &categoryName, &likes, &dislikes, &imageLink)
 		if err != nil {
 			http.Error(w, "Error scanning post", http.StatusInternalServerError)
+			return nil
+		}
+
+		// Décoder les liens d'image
+		decodedImageLink, err := decodeURL(imageLink)
+		if err != nil {
+			http.Error(w, "Error decoding image link", http.StatusInternalServerError)
 			return nil
 		}
 
@@ -459,7 +476,8 @@ func handleHome(w http.ResponseWriter, r *http.Request, category string) map[str
 			"CategoryName": categoryName,
 			"LikeCount":    likes,
 			"DislikeCount": dislikes,
-			"rank":         isModo,
+			"ImageLink":    decodedImageLink,
+			"Rank":         isModo,
 		}
 		posts = append(posts, post)
 	}
@@ -472,6 +490,16 @@ func handleHome(w http.ResponseWriter, r *http.Request, category string) map[str
 	}
 
 	return data
+}
+
+func decodeURL(encodedURL string) (string, error) {
+	decodedURL, err := url.QueryUnescape(encodedURL)
+	if err != nil {
+		return "", err
+	}
+	// Remplacer les barres obliques inverses par des barres obliques
+	decodedURL = strings.ReplaceAll(decodedURL, "\\", "/")
+	return decodedURL, nil
 }
 
 func handleProfile(w http.ResponseWriter, r *http.Request) map[string]interface{} {
@@ -838,7 +866,7 @@ func createImage(w http.ResponseWriter, r *http.Request, postID int64) {
 	defer file.Close()
 
 	// Save the file to the disk
-	filePath := filepath.Join("uploads/images", handler.Filename)
+	filePath := filepath.Join("Static/uploads/images", handler.Filename)
 	dest, err := os.Create(filePath)
 	if err != nil {
 		http.Error(w, "Error saving the file", http.StatusInternalServerError)

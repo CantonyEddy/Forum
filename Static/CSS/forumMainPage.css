@@ -1,0 +1,138 @@
+
+body, h1, h2, p, img, a {
+    margin: 0;
+    padding: 0;
+    text-decoration: none;
+    color: inherit;
+}
+
+
+body {
+    font-family: Arial, sans-serif;
+    color: black;
+    line-height: 1.6;
+    background-image: url("../Images/fond.jpg");
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center center;
+    margin: 0;
+}
+
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.topbar {
+    background: linear-gradient(#0095ff, white);
+    padding: 20px;
+    margin-bottom: 20px;
+    margin-left: 20px;
+    margin-right: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: 2px solid #1e1e1e;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: center;
+    margin: 10px 10px;
+}
+
+.button:hover {
+    background-color: #0056b3;
+}
+
+.post {
+    background: #3c3c3c;
+    padding: 20px;
+    margin-bottom: 20px;
+    margin-left: 100px;
+    margin-right: 100px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.post img {
+    width: 100%;
+    height: auto;
+    max-width: 300px;
+    display: block;
+    margin: 10px 0;
+    object-fit: cover; /* Maintenir le ratio tout en recouvrant la zone */
+    border-radius: 5px;
+}
+
+.post h2 {
+    margin-bottom: 10px;
+}
+
+.post p {
+    margin-bottom: 10px;
+}
+
+.likes-dislikes {
+    display: flex;
+    align-items: center;
+}
+
+.likes-dislikes p {
+    margin-left: 10px;
+    margin-right: 20px;
+}
+
+.like-button, .dislike-button {
+    display: inline-block;
+    padding: 10px;
+    background-color: #e0e0e0;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-right: 5px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.like{
+    text-decoration: none;
+    padding: 10px;
+    font-family: arial;
+    font-size: 1em;
+    color: #FFFFFF;
+    background-color: #ff0000;
+    border-radius: 14px;
+    -webkit-border-radius: 14px;
+    -moz-border-radius: 14px;
+    border: 4px solid #FFFFFF;
+    box-shadow: 3px 3px 8px #444444;
+    -webkit-box-shadow: 3px 3px 8px #444444;
+    -moz-box-shadow: 3px 3px 8px #444444;
+}
+
+
+.like:hover {
+    padding: 10px;
+    background-color: #c00000;
+    border-radius: 24px;
+    -webkit-border-radius: 24px;
+    -moz-border-radius: 24px;
+    box-shadow: 1px 1px 4px #777777;
+    -webkit-box-shadow: 1px 1px 4px #777777;
+    -moz-box-shadow: 1px 1px 4px #777777;
+}
