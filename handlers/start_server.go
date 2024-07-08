@@ -827,7 +827,7 @@ func createImage(w http.ResponseWriter, r *http.Request, postID int64) {
 	defer file.Close()
 
 	// Save the file to the disk
-	filePath := filepath.Join("uploads/images", handler.Filename)
+	filePath := filepath.Join("Static/uploads/images", handler.Filename)
 	dest, err := os.Create(filePath)
 	if err != nil {
 		http.Error(w, "Error saving the file", http.StatusInternalServerError)

@@ -5,10 +5,13 @@
         <meta charset="UTF-8">
         <link rel="stylesheet" type="text/css" href="/Static/CSS/forumMainPage.css">
         <title>Title</title>
+
     </head>
     <body>
-    <h1>Welcome, {{.Username}}!</h1>
-    <h1>Bienvenue sur le forum</h1>
+        <div class="topbar">
+            <h1>Welcome, {{.Username}}!</h1>
+            <h1>Bienvenue sur le forum</h1>
+        </div>
     {{if .Rank}}
         <a href="/adminPannel" class="button">admin pannel</a>
     {{end}}
