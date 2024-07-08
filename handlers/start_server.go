@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -144,7 +145,8 @@ func StartServer() {
 
 	http.HandleFunc("/Forum", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/Forum" {
-			data := handleHome(w, r)
+			category := r.URL.Query().Get("category")
+			data := handleHome(w, r, category)
 			tmpl_main_page.Execute(w, data)
 		} else {
 			fileServer.ServeHTTP(w, r)
@@ -171,7 +173,7 @@ func StartServer() {
 
 	http.HandleFunc("/createPost", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/createPost" {
-			data := handleHome(w, r)
+			data := handleHome(w, r, "")
 			tmpl_create_poste.Execute(w, data)
 		} else {
 			fileServer.ServeHTTP(w, r)
@@ -194,6 +196,7 @@ func StartServer() {
 	http.HandleFunc("/upgradeRank", handleRankUp)
 	http.HandleFunc("/addPost", createPost)
 	http.HandleFunc("/likePost", handleLikePost)
+	http.HandleFunc("/deletePost", deletePostByID)
 
 	http.HandleFunc("/auth/google/login", HandleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", HandleGoogleCallback)
@@ -208,11 +211,11 @@ func StartServer() {
 }
 
 func createTables(db *sql.DB) {
-	dropPostTableSQL := `DROP TABLE IF EXISTS Account;`
+	/*dropPostTableSQL := `DROP TABLE IF EXISTS Account;`
 	_, err := db.Exec(dropPostTableSQL)
 	if err != nil {
 		log.Fatal(err)
-	} /*
+	}
 
 		dropLikeTableSQL := `DROP TABLE IF EXISTS PostLikes;`
 		_, err = db.Exec(dropLikeTableSQL)
@@ -227,7 +230,7 @@ func createTables(db *sql.DB) {
         mail TEXT NOT NULL,
         rank TEXT NOT NULL
     );`
-	_, err = db.Exec(createAccountTableSQL)
+	_, err := db.Exec(createAccountTableSQL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -286,6 +289,11 @@ func createTables(db *sql.DB) {
 		log.Fatal(err)
 	}
 
+	/*insertAccountSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
+	_, err = db.Exec(insertAccountSQL, "admin", "admin", "john@example.com", "admin")
+	if err != nil {
+		log.Fatal(err)
+	}*/
 }
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -364,7 +372,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }
 
-func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
+func handleHome(w http.ResponseWriter, r *http.Request, category string) map[string]interface{} {
 	username := getSessionUsername(r)
 	fmt.Println(username)
 	rank, err := getSessionRank(r)
@@ -374,8 +382,18 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 		return nil
 	}
 
-	// Récupérer les postes de la base de données
-	rows, err := db.Query(`SELECT 
+	// Récupérer le paramètre de tri de l'URL
+	sort := r.URL.Query().Get("sort")
+	orderBy := "p.id DESC" // Tri par défaut
+
+	if sort == "likes_asc" {
+		orderBy = "likeCount ASC"
+	} else if sort == "likes_desc" {
+		orderBy = "likeCount DESC"
+	}
+
+	// Construire la requête SQL avec le tri spécifié
+	query := `SELECT 
             p.id, 
             p.post_name, 
             p.creator_id, 
@@ -395,19 +413,39 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
             GROUP BY 
                 post_id
         ) pl 
-        ON p.id = pl.post_id 
-        ORDER BY p.id DESC`)
+        ON p.id = pl.post_id`
+
+	var rows *sql.Rows
+
+	if category != "" {
+		query += " WHERE p.category_name = ? ORDER BY " + orderBy
+		rows, err = db.Query(query, category)
+	} else {
+		query += " ORDER BY " + orderBy
+		rows, err = db.Query(query)
+	}
+
 	if err != nil {
 		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
 		return nil
 	}
 	defer rows.Close()
 
+	isAdmin := false
+	if rank == "admin" {
+		isAdmin = true
+	}
+
+	isModo := false
+	if rank == "Modérateurs" || rank == "admin" {
+		isModo = true
+	}
+
 	var posts []map[string]interface{}
 	for rows.Next() {
 		var id, likes, dislikes int
-		var postName, creatorID, postMessage, category_name string
-		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &category_name, &likes, &dislikes)
+		var postName, creatorID, postMessage, categoryName string
+		err := rows.Scan(&id, &postName, &creatorID, &postMessage, &categoryName, &likes, &dislikes)
 		if err != nil {
 			http.Error(w, "Error scanning post", http.StatusInternalServerError)
 			return nil
@@ -418,22 +456,19 @@ func handleHome(w http.ResponseWriter, r *http.Request) map[string]interface{} {
 			"PostName":     postName,
 			"CreatorID":    creatorID,
 			"PostMessage":  postMessage,
-			"categoryName": category_name,
+			"CategoryName": categoryName,
 			"LikeCount":    likes,
 			"DislikeCount": dislikes,
+			"rank":         isModo,
 		}
 		posts = append(posts, post)
-	}
-
-	isAdmin := false
-	if rank == "admin" {
-		isAdmin = true
 	}
 
 	data := map[string]interface{}{
 		"Username": username,
 		"Posts":    posts,
 		"Rank":     isAdmin,
+		"Category": category,
 	}
 
 	return data
@@ -984,4 +1019,88 @@ func handleAddComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/post/"+postID, http.StatusSeeOther)
+}
+
+func deletePostByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	postID := r.FormValue("id")
+	if postID == "" {
+		http.Error(w, "Post ID is required", http.StatusBadRequest)
+		return
+	}
+
+	username := getSessionUsername(r)
+	userId := getUserIDByUsername(username)
+	rank, err := getSessionRank(r)
+	if err != nil {
+		http.Error(w, "Error getting session rank", http.StatusInternalServerError)
+		return
+	}
+
+	var creatorID string
+	err = db.QueryRow("SELECT creator_id FROM Post WHERE id = ?", postID).Scan(&creatorID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Post not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Error checking post creator", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	id, err := strconv.Atoi(creatorID)
+	if err != nil {
+		panic(err)
+	}
+
+	if userId != id && rank != "admin" && rank != "Modérateurs" {
+		http.Error(w, "Unauthorized to delete this post", http.StatusUnauthorized)
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, "Error beginning transaction", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = tx.Exec("DELETE FROM PostLikes WHERE post_id = ?", postID)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Error deleting post likes", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = tx.Exec("DELETE FROM Commentaire WHERE post_id = ?", postID)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Error deleting comments", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = tx.Exec("DELETE FROM Image WHERE post_id = ?", postID)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Error deleting Image", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = tx.Exec("DELETE FROM Post WHERE id = ?", postID)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Error deleting post", http.StatusInternalServerError)
+		return
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		http.Error(w, "Error committing transaction", http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }

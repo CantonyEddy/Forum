@@ -10,7 +10,26 @@
 <h1>Welcome, {{.Username}}!</h1>
 <form action="/addPost" method="POST" enctype="multipart/form-data" class="create-post-form">
     <input type="text" id="postName" name="postName" placeholder="Title Post" required class="title-input">
-    <input type="text" id="category_name" name="category_name" placeholder="Categorize" required class="category-input">
+    <br>
+    <label for="category_name">Catégorie :</label>
+    <select id="category_name" name="category_name">
+        <option value="">Toutes les catégories</option>
+        <option value="Minecraft">Minecraft</option>
+        <option value="Build">Build</option>
+        <option value="Mod Weapon">Mod Weapon</option>
+        <option value="Factory">Factory</option>
+        <option value="Mod Creature">Mod Creature</option>
+        <option value="Server">Server</option>
+        <option value="Mod Ore">Mod Ore</option>
+        <option value="Mod Maps/Bioms">Mod Maps/Bioms</option>
+        <option value="Mod Structure">Mod Structure</option>
+        <option value="Mod Tools">Mod Tools</option>
+        <option value="Mod Magic">Mod Magic</option>
+        <option value="SpeedRun">SpeedRun</option>
+        <option value="Survival">Survival</option>
+        <option value="Creative">Creative</option>
+    </select>
+    <br>
     <input type="file" id="postImage" name="postImage" accept="image/*" onchange="previewImage(event)" class="image-input">
     <textarea id="postMessage" name="postMessage" placeholder="Your Post" required class="message-input"></textarea>
     <div class="image-preview-container">

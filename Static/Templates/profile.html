@@ -31,6 +31,10 @@
         <p>Catégorie: {{.CategoryName}}</p>
         <p>Likes: {{.LikeCount}}</span></p>
         <p>Dislikes: {{.DislikeCount}}</span></p>
+        <form action="/deletePost" method="POST">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button type="submit" class="delete-button">Supprimer</button>
+        </form>
     </div>
     {{end}}
     {{end}}
