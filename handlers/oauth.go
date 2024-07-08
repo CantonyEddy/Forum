@@ -254,7 +254,77 @@ func HandleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("GitHub User Info:", userInfo)
 	// Handle the user authentication or registration using GitHub account
-	http.Redirect(w, r, "/Forum", http.StatusSeeOther)
+	handleLoginGithub(w, r, userInfo)
+}
+
+func handleLoginGithub(w http.ResponseWriter, r *http.Request, userInfo map[string]interface{}) {
+	username, ok := userInfo["login"].(string)
+	if !ok {
+		log.Println("Erreur: le nom d'utilisateur n'est pas une chaîne")
+		http.Error(w, "Erreur lors de l'obtention du nom d'utilisateur", http.StatusInternalServerError)
+		return
+	}
+
+	email, ok := userInfo["email"]
+	if !ok {
+		log.Println("Erreur: l'email n'est pas une chaîne")
+		http.Error(w, "Erreur lors de l'obtention de l'email", http.StatusInternalServerError)
+		return
+	}
+
+	log.Println("Nom d'utilisateur:", username)
+	log.Println("Email:", email)
+
+	var dbUsername string
+	checkUser := true
+	for checkUser {
+		query := `SELECT username FROM Account WHERE username = ?`
+		err := db.QueryRow(query, username).Scan(&dbUsername)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				log.Println("Aucun utilisateur trouvé avec le nom d'utilisateur:", username)
+				insertUserSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
+				statement, err := db.Prepare(insertUserSQL)
+				if err != nil {
+					http.Error(w, "Erreur lors de la préparation de l'instruction", http.StatusInternalServerError)
+					return
+				}
+				defer statement.Close()
+
+				_, err = statement.Exec(username, nil, email, "user")
+				if err != nil {
+					http.Error(w, "Erreur lors de l'insertion de l'utilisateur dans la base de données", http.StatusInternalServerError)
+					return
+				}
+				log.Println("Utilisateur inséré dans la base de données")
+			} else {
+				log.Println("Erreur lors de la requête à la base de données:", err)
+				http.Error(w, "Erreur lors de la requête à la base de données", http.StatusInternalServerError)
+				return
+			}
+			checkUser = false
+		} else {
+			checkUser = false
+		}
+	}
+
+	sessionToken := fmt.Sprintf("%d", time.Now().UnixNano())
+	log.Println("Création d'une nouvelle session avec le jeton:", sessionToken)
+
+	sessionsMutex.Lock()
+	sessions[sessionToken] = username
+	sessionsMutex.Unlock()
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    sessionToken,
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+		Path:     "/",
+	})
+
+	log.Println("Jeton de session défini:", sessionToken)
+	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }
 
 func SetupRoutes() {
