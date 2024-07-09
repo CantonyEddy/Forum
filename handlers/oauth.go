@@ -124,9 +124,6 @@ func handleLoginGoogle(w http.ResponseWriter, r *http.Request, userInfo map[stri
 		return
 	}
 
-	log.Println("Nom d'utilisateur:", username)
-	log.Println("Email:", email)
-
 	var dbUsername string
 	checkUser := true
 	for checkUser {
@@ -161,7 +158,6 @@ func handleLoginGoogle(w http.ResponseWriter, r *http.Request, userInfo map[stri
 	}
 
 	sessionToken := fmt.Sprintf("%d", time.Now().UnixNano())
-	log.Println("Création d'une nouvelle session avec le jeton:", sessionToken)
 
 	sessionsMutex.Lock()
 	sessions[sessionToken] = username
@@ -175,7 +171,6 @@ func handleLoginGoogle(w http.ResponseWriter, r *http.Request, userInfo map[stri
 		Path:     "/",
 	})
 
-	log.Println("Jeton de session défini:", sessionToken)
 	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }
 
@@ -191,7 +186,6 @@ func isUserLoggedIn(r *http.Request) (bool, string) {
 	}
 
 	sessionToken := cookie.Value
-	log.Println("Jeton de session récupéré du cookie:", sessionToken)
 
 	sessionsMutex.Lock()
 	username, exists := sessions[sessionToken]
@@ -272,9 +266,6 @@ func handleLoginGithub(w http.ResponseWriter, r *http.Request, userInfo map[stri
 		return
 	}
 
-	log.Println("Nom d'utilisateur:", username)
-	log.Println("Email:", email)
-
 	var dbUsername string
 	checkUser := true
 	for checkUser {
@@ -309,7 +300,6 @@ func handleLoginGithub(w http.ResponseWriter, r *http.Request, userInfo map[stri
 	}
 
 	sessionToken := fmt.Sprintf("%d", time.Now().UnixNano())
-	log.Println("Création d'une nouvelle session avec le jeton:", sessionToken)
 
 	sessionsMutex.Lock()
 	sessions[sessionToken] = username
@@ -322,8 +312,6 @@ func handleLoginGithub(w http.ResponseWriter, r *http.Request, userInfo map[stri
 		HttpOnly: true,
 		Path:     "/",
 	})
-
-	log.Println("Jeton de session défini:", sessionToken)
 	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }
 
