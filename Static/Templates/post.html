@@ -33,6 +33,9 @@
             <a class="button" href="/Forum">Acceuil</a>
             <p>Par {{.CreatorUsername}} dans la catégorie {{.CategoryName}}</p>
             <p>{{.PostMessage}}</p>
+            {{if .ImageLink}}
+                <img src="../{{.ImageLink}}" alt="Post Image">
+            {{end}}
             <div class="likes-dislikes">
                 <button onclick="likePost({{.ID}}, true)" class="like">Like</button>
                 <button onclick="likePost({{.ID}}, false)" class="dislike">Dislike</button>
