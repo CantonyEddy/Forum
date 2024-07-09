@@ -280,9 +280,9 @@ func createTables(db *sql.DB) {
 		log.Fatal(err)
 	}
 
-	insertAccountSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
+	/*insertAccountSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
 	_, err = db.Exec(insertAccountSQL, "admin", "admin", "john@example.com", "admin")
 	if err != nil {
 		log.Fatal(err)
-	}
+	}*/
 }
