@@ -2,19 +2,19 @@
 <html>
 <head>
     <title>Login</title>
+    <link rel="stylesheet" href="/Static/CSS/login.css">
 </head>
+
 <body>
-<h2>Login</h2>
-<form action="/loginUser" method="POST">
-    <label for="username">Username:</label>
-    <input type="text" id="username" name="username" required><br><br>
+    <form action="/loginUser" method="POST">
+        <h2>Login</h2>
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required><br><br>
 
-    <label for="password">Password:</label>
-    <input type="password" id="password" name="password" required><br><br>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required><br><br>
 
-    <input type="submit" value="Login">
-    <a href="/auth/google/login"><button type="button">Login with Google</button></a>
-    <a href="/auth/github/login"><button type="button">Login with GitHub</button></a>
-</form>
+        <input type="submit" value="Login">
+    </form>
 </body>
 </html>
