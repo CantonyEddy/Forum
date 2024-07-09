@@ -6,12 +6,13 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background : linear-gradient(#aaaafd, blue);
+    background-image: url("../Images/Minecraft_terre.png")
 }
 
 h1 {
     color: #333;
     margin-bottom: 20px;
+    text-align: center;
 }
 
 .create-post-form {

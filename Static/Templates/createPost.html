@@ -9,7 +9,7 @@
 
 <body>
     <form action="/addPost" method="POST" enctype="multipart/form-data" class="create-post-form">
-        <h1>Welcome, {{.Username}}!</h1>
+        <h1>Vos post, {{.Username}}!</h1>
         <input type="text" id="postName" name="postName" placeholder="Title Post" required class="title-input">
         <input type="text" id="category_name" name="category_name" placeholder="Categorize" required class="category-input">
         <input type="file" id="postImage" name="postImage" accept="image/*" onchange="previewImage(event)" class="image-input">
