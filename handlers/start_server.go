@@ -194,7 +194,7 @@ func StartServer() {
 	http.HandleFunc("/auth/github/login", HandleGitHubLogin)
 	http.HandleFunc("/auth/github/callback", HandleGitHubCallback)
 
-	fmt.Println("Pour accéder à la page web -> https://localhost:8080/")
+	fmt.Println("Pour accéder à la page web -> http://localhost:8080/")
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatal("ListenAndServeTLS: ", err)
