@@ -112,12 +112,7 @@ func StartServer() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
-			if !isAuthenticated(r) {
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
-				return
-			} else {
-				http.ServeFile(w, r, filepath.Join(wd, "Static", "Templates", "index.html"))
-			}
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
 		} else {
 			fileServer.ServeHTTP(w, r)
 		}
@@ -285,9 +280,9 @@ func createTables(db *sql.DB) {
 		log.Fatal(err)
 	}
 
-	/*insertAccountSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
+	insertAccountSQL := `INSERT INTO Account (username, password, mail, rank) VALUES (?, ?, ?, ?)`
 	_, err = db.Exec(insertAccountSQL, "admin", "admin", "john@example.com", "admin")
 	if err != nil {
 		log.Fatal(err)
-	}*/
+	}
 }

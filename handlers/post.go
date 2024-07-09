@@ -61,7 +61,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	// Handle the image upload
 	createImage(w, r, postID)
 
-	fmt.Fprintf(w, "Post %s registered successfully!", postName)
+	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }
 
 func handlePost(w http.ResponseWriter, r *http.Request) {

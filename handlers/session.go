@@ -39,7 +39,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "User %s registered successfully!", username)
+	http.Redirect(w, r, "/Forum?username="+username, http.StatusSeeOther)
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {

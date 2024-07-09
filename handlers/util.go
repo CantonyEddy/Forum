@@ -63,7 +63,7 @@ func handleRankUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	return
+	http.Redirect(w, r, "/adminPannel", http.StatusSeeOther)
 }
 
 func isAuthenticated(r *http.Request) bool {
