@@ -4,37 +4,39 @@
 <head>
     <meta charset="UTF-8">
     <title>Forum</title>
+    <link rel="stylesheet" href="/Static/CSS/profile.css">
 </head>
+
 <body>
-<h1>Bienvenue, {{.Username}}!</h1>
-<h2>Posts que vous avez aimés :</h2>
-<div id="posts">
-    {{range .PostsLike}}
-    <div class="post">
-        <h3>{{.PostName}}</h3>
-        <p>Par: {{.CreatorID}}</p>
-        <p>{{.PostMessage}}</p>
-        <p>Catégorie: {{.CategoryName}}</p>
-        <p>Likes: {{.Likes}}</span></p>
-        <p>Dislikes: {{.Dislikes}}</span></p>
+    <div id="posts">
+        {{range .PostsLike}}
+        <div class="post">
+            <h1>Bienvenue, {{.Username}}!</h1>
+            <h2>Posts que vous avez aimés :</h2>
+            <h3>{{.PostName}}</h3>
+            <p>Par: {{.CreatorID}}</p>
+            <p>{{.PostMessage}}</p>
+            <p>Catégorie: {{.CategoryName}}</p>
+            <p>Likes: {{.Likes}}</span></p>
+            <p>Dislikes: {{.Dislikes}}</span></p>
+        </div>
+        {{end}}
     </div>
-    {{end}}
-</div>
-<h2>Posts que vous avez crée :</h2>
-<div id="posts-create">
-    {{range .Posts}}
-    {{if .IsEqID}}
-    <div class="post">
-        <h3>{{.PostName}}</h3>
-        <p>Par: {{.CreatorID}}</p>
-        <p>{{.PostMessage}}</p>
-        <p>Catégorie: {{.CategoryName}}</p>
-        <p>Likes: {{.LikeCount}}</span></p>
-        <p>Dislikes: {{.DislikeCount}}</span></p>
+    <h2>Posts que vous avez crée :</h2>
+    <div id="posts-create">
+        {{range .Posts}}
+        {{if .IsEqID}}
+        <div class="post">
+            <h3>{{.PostName}}</h3>
+            <p>Par: {{.CreatorID}}</p>
+            <p>{{.PostMessage}}</p>
+            <p>Catégorie: {{.CategoryName}}</p>
+            <p>Likes: {{.LikeCount}}</span></p>
+            <p>Dislikes: {{.DislikeCount}}</span></p>
+        </div>
+        {{end}}
+        {{end}}
     </div>
-    {{end}}
-    {{end}}
-</div>
 </body>
 </html>
 {{ end }}
