@@ -64,9 +64,15 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePost(w http.ResponseWriter, r *http.Request) {
-	postID := strings.TrimPrefix(r.URL.Path, "/post/")
-	if postID == "" {
+	postIDStr := strings.TrimPrefix(r.URL.Path, "/post/")
+	if postIDStr == "" {
 		http.Error(w, "Post ID manquant", http.StatusBadRequest)
+		return
+	}
+
+	postID, err := strconv.Atoi(postIDStr)
+	if err != nil {
+		http.Error(w, "Invalid post ID", http.StatusBadRequest)
 		return
 	}
 
@@ -78,7 +84,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 		CategoryName    string
 		Likes           int
 		Dislikes        int
-		Comments        []Comment
+		ImageLinks      []string // Add this field to store image links
 	}
 
 	query := `SELECT p.id, p.post_name, a.username AS creator_username, p.post_message, p.category_name, 
@@ -88,7 +94,7 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
               JOIN Account a ON p.creator_id = a.id
               WHERE p.id = ?`
 
-	err := db.QueryRow(query, postID).Scan(&post.ID, &post.PostName, &post.CreatorUsername, &post.PostMessage, &post.CategoryName, &post.Likes, &post.Dislikes)
+	err = db.QueryRow(query, postID).Scan(&post.ID, &post.PostName, &post.CreatorUsername, &post.PostMessage, &post.CategoryName, &post.Likes, &post.Dislikes)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Post non trouvé", http.StatusNotFound)
@@ -106,29 +112,31 @@ func handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var comments []Comment
-	for rows.Next() {
-		var comment Comment
-		err := rows.Scan(&comment.ID, &comment.Message, &comment.Username)
+	// Récupérer les images associées au post
+	imageRows, err := db.Query(`SELECT link FROM Image WHERE post_id = ?`, postID)
+	if err != nil {
+		http.Error(w, "Erreur lors de la récupération des images", http.StatusInternalServerError)
+		return
+	}
+	defer imageRows.Close()
+
+	var imageLinks []string
+	for imageRows.Next() {
+		var link string
+		err := imageRows.Scan(&link)
 		if err != nil {
-			http.Error(w, "Erreur lors de l'analyse des commentaires", http.StatusInternalServerError)
+			http.Error(w, "Erreur lors de l'analyse des images", http.StatusInternalServerError)
 			return
 		}
-		comments = append(comments, comment)
+		imageLinks = append(imageLinks, link)
 	}
 
-	post.Comments = comments
+	post.ImageLinks = imageLinks
 
 	err = tmpl_post.Execute(w, post)
 	if err != nil {
 		http.Error(w, "Erreur lors du rendu du template", http.StatusInternalServerError)
 	}
-}
-
-type Comment struct {
-	ID       int
-	Message  string
-	Username string
 }
 
 func deletePostByID(w http.ResponseWriter, r *http.Request) {
