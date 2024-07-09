@@ -14,7 +14,12 @@
     <div id="posts">
         {{range .PostsLike}}
             <div class="post">
-                <h3>{{.PostName}}</h3>
+                <a href="/post/{{.ID}}">
+                    <h2>{{.PostName}}</h2>
+                </a>
+                {{if .ImageLink}}
+                <img src="../{{.ImageLink}}" alt="Post Image">
+                {{end}}
                 <p>Par: {{.CreatorID}}</p>
                 <p>{{.PostMessage}}</p>
                 <p>Catégorie: {{.CategoryName}}</p>
@@ -28,7 +33,12 @@
         {{range .Posts}}
             {{if .IsEqID}}
                 <div class="post">
-                    <h3>{{.PostName}}</h3>
+                    <a href="/post/{{.ID}}">
+                        <h2>{{.PostName}}</h2>
+                    </a>
+                    {{if .ImageLink}}
+                    <img src="../{{.ImageLink}}" alt="Post Image">
+                    {{end}}
                     <p>Par: {{.CreatorID}}</p>
                     <p>{{.PostMessage}}</p>
                     <p>Catégorie: {{.CategoryName}}</p>

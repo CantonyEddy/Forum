@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -271,6 +270,4 @@ func createImage(w http.ResponseWriter, r *http.Request, postID int64) {
 		log.Println("Error inserting image link into database:", err)
 		return
 	}
-
-	fmt.Fprintf(w, "File uploaded successfully: %s\n", handler.Filename)
 }
