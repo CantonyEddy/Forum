@@ -1,45 +1,48 @@
 {{ define "profile" }}
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <title>Forum</title>
-</head>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" type="text/css" href="/Static/CSS/profile.css">
+        <title>Forum</title>
 
-<body>
-    <h1>Bienvenue, {{.Username}}!</h1>
+    </head>
+    <body>
+    <h1>name: {{.Username}}</h1>
+    <a class="button" href="/Forum">Acceuil</a>
     <h2>Posts que vous avez aimés :</h2>
     <div id="posts">
         {{range .PostsLike}}
-        <div class="post">
-            <h3>{{.PostName}}</h3>
-            <p>Par: {{.CreatorID}}</p>
-            <p>{{.PostMessage}}</p>
-            <p>Catégorie: {{.CategoryName}}</p>
-            <p>Likes: {{.Likes}}</span></p>
-            <p>Dislikes: {{.Dislikes}}</span></p>
-        </div>
+            <div class="post">
+                <h3>{{.PostName}}</h3>
+                <p>Par: {{.CreatorID}}</p>
+                <p>{{.PostMessage}}</p>
+                <p>Catégorie: {{.CategoryName}}</p>
+                <p><span>Likes: {{.Likes}}</span></p>
+                <p><span>Dislikes: {{.Dislikes}}</span></p>
+            </div>
         {{end}}
     </div>
     <div id="posts-create">
         <h2>Posts que vous avez crée :</h2>
         {{range .Posts}}
-        {{if .IsEqID}}
-        <div class="post">
-            <h3>{{.PostName}}</h3>
-            <p>Par: {{.CreatorID}}</p>
-            <p>{{.PostMessage}}</p>
-            <p>Catégorie: {{.CategoryName}}</p>
-            <p>Likes: {{.LikeCount}}</span></p>
-            <p>Dislikes: {{.DislikeCount}}</span></p>
-            <form action="/deletePost" method="POST">
-                <input type="hidden" name="id" value="{{.ID}}">
-                <button type="submit" class="delete-button">Supprimer</button>
-            </form>
-        </div>
-        {{end}}
+            {{if .IsEqID}}
+                <div class="post">
+                    <h3>{{.PostName}}</h3>
+                    <p>Par: {{.CreatorID}}</p>
+                    <p>{{.PostMessage}}</p>
+                    <p>Catégorie: {{.CategoryName}}</p>
+                    <p><span>Likes: {{.LikeCount}}</span></p>
+                    <p><span>Dislikes: {{.DislikeCount}}</span></p>
+                    <form action="/deletePost" method="POST">
+                        <input type="hidden" name="id" value="{{.ID}}">
+                        <button type="submit" class="delete-button">Supprimer</button>
+                    </form>
+                </div>
+            {{end}}
         {{end}}
     </div>
-</body>
-</html>
+    </body>
+    </html>
 {{ end }}
+
