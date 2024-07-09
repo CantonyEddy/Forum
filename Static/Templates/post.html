@@ -49,6 +49,9 @@
             {{range .Comments}}
                 <div class="comment">
                     <p><strong>{{.Username}}:</strong> {{.Message}}</p>
+                    {{if .ImageLink}}
+                        <img src="../{{.ImageLink}}" alt="Post Image">
+                    {{end}}
                 </div>
             {{else}}
                 <p>Aucun commentaire pour le moment.</p>
