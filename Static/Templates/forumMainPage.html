@@ -5,66 +5,83 @@
         <meta charset="UTF-8">
         <link rel="stylesheet" type="text/css" href="/Static/CSS/forumMainPage.css">
         <title>Title</title>
-
     </head>
     <body>
-        <div class="topbar">
-            <h1>Welcome, {{.Username}}!</h1>
-            <h1>Bienvenue sur le forum</h1>
-        </div>
-    {{if .Rank}}
-        <a href="/adminPannel" class="button">admin pannel</a>
-    {{end}}
-    <a href="/profile" class="button">Profile</a>
-    <a href="/createPost" class="button">+Create Post</a>
-    <form method="get" action="/Forum">
-        <label for="category">Filtrer par catégorie :</label>
-        <select id="category" name="category">
-            <option value="">Toutes les catégories</option>
-            <option value="Minecraft">Minecraft</option>
-            <option value="Build">Build</option>
-            <option value="Mod Weapon">Mod Weapon</option>
-            <option value="Factory">Factory</option>
-            <option value="Mod Creature">Mod Creature</option>
-            <option value="Server">Server</option>
-            <option value="Mod Ore">Mod Ore</option>
-            <option value="Mod Maps/Bioms">Mod Maps/Bioms</option>
-            <option value="Mod Structure">Mod Structure</option>
-            <option value="Mod Tools">Mod Tools</option>
-            <option value="Mod Magic">Mod Magic</option>
-            <option value="SpeedRun">SpeedRun</option>
-            <option value="Survival">Survival</option>
-            <option value="Creative">Creative</option>
-            <!-- Ajoutez d'autres options de catégories ici -->
-        </select>
-        <button type="submit">Filtrer</button>
-    </form>
-    <div>
-        <a href="/Forum?sort=likes_asc">Trier par nombre de likes (croissant)</a>
-        <a href="/Forum?sort=likes_desc">Trier par nombre de likes (décroissant)</a>
-    </div>
-    {{range .Posts}}
-        <div class="post">
-            <a href="/post/{{.ID}}">
-                <h2>{{.PostName}}</h2>
+    <div class="topbar">
+        <div class="topbar-left">
+            <a href="/profile" class="button profile-button">
+                <h2>Profil</h2>
             </a>
-            <p>{{.PostMessage}}</p>
-            {{if .ImageLink}}
-                <img src="../{{.ImageLink}}" alt="Post Image">
+            {{if .Rank}}
+                <a href="/adminPannel" class="button">
+                    <h2>Admin Pannel</h2>
+                </a>
             {{end}}
-            <button onclick="likePost({{.ID}}, true)" class="like">Like</button>
-            <button onclick="likePost({{.ID}}, false)" class="like">Dislike</button>
-            <p>Likes: <span id="likeCount-{{.ID}}">{{.LikeCount}}</span></p>
-            <p>Dislikes: <span id="dislikeCount-{{.ID}}">{{.DislikeCount}}</span></p>
-            {{if .rank}}
-            <form action="/deletePost" method="POST">
-                <input type="hidden" name="id" value="{{.ID}}">
-                <button type="submit" class="delete-button">Supprimer</button>
+            <form method="get" action="/Forum" class="filter-form">
+                <label class="sort-links" for="category">
+                    <h2>Filtrer par catégorie :</h2>
+                </label>
+                <select id="category" name="category">
+                    <option value="">Toutes les catégories</option>
+                    <option value="Minecraft">Minecraft</option>
+                    <option value="Build">Build</option>
+                    <option value="Mod Weapon">Mod Weapon</option>
+                    <option value="Factory">Factory</option>
+                    <option value="Mod Creature">Mod Creature</option>
+                    <option value="Server">Server</option>
+                    <option value="Mod Ore">Mod Ore</option>
+                    <option value="Mod Maps/Bioms">Mod Maps/Bioms</option>
+                    <option value="Mod Structure">Mod Structure</option>
+                    <option value="Mod Tools">Mod Tools</option>
+                    <option value="Mod Magic">Mod Magic</option>
+                    <option value="SpeedRun">SpeedRun</option>
+                    <option value="Survival">Survival</option>
+                    <option value="Creative">Creative</option>
+                </select>
+                <button type="submit">Filtrer</button>
             </form>
-            {{end}}
+            <div class="sort-links">
+                <a href="/Forum?sort=likes_asc">
+                    <h2>Trier par nombre de likes (croissant)</h2>
+                </a>
+                <a href="/Forum?sort=likes_desc">
+                    <h2>Trier par nombre de likes (décroissant)</h2>
+                </a>
+            </div>
         </div>
-    {{end}}
-    </body>
+        <div class="topbar-right">
+            <a href="/createPost" class="button create-post">
+                <h2>+Create Post</h2>
+            </a>
+        </div>
+    </div>
+    <div class="container">
+        {{range .Posts}}
+            <div class="post">
+                <a href="/post/{{.ID}}">
+                    <h2>{{.PostName}}</h2>
+                </a>
+                <p>
+                <h3>{{.PostMessage}}</h3>
+                </p>
+                {{if .ImageLink}}
+                    <img src="../{{.ImageLink}}" alt="Post Image">
+                {{end}}
+                <div class="likes-dislikes">
+                    <button onclick="likePost({{.ID}}, true)" class="like">Like</button>
+                    <button onclick="likePost({{.ID}}, false)" class="dislike">Dislike</button>
+                    <p>Likes: <span id="likeCount-{{.ID}}">{{.LikeCount}}</span></p>
+                    <p>Dislikes: <span id="dislikeCount-{{.ID}}">{{.DislikeCount}}</span></p>
+                </div>
+                {{if .Rank}}
+                    <form action="/deletePost" method="POST">
+                        <input type="hidden" name="id" value="{{.ID}}">
+                        <button type="submit" class="delete-button">Supprimer</button>
+                    </form>
+                {{end}}
+            </div>
+        {{end}}
+    </div>
     <script>
         async function likePost(postID, like) {
             const response = await fetch(`/likePost?postID=${postID}&like=${like}`, {
@@ -83,5 +100,6 @@
             }
         }
     </script>
+    </body>
     </html>
 {{ end }}
